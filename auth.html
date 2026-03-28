@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Surface Calculators — Sign In</title>
+  <title>Maman Calculators — Sign In</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -182,8 +182,8 @@
 <body>
 
 <div class="auth-hero">
-  <img class="auth-logo" src="surface-calc-logo.jpg" alt="Surface Calculators" />
-  <div class="auth-title">Surface Calculators</div>
+  <img class="auth-logo" src="maman-logo.jpg" alt="Maman" />
+  <div class="auth-title">Maman Calculators</div>
   <div class="auth-sub">Sign in to access your calculators</div>
 </div>
 
@@ -231,7 +231,7 @@
   <div class="auth-screen" id="screen-signup">
     <div class="field">
       <label class="field-label">Full Name</label>
-      <input class="field-input" type="text" id="signup-name" placeholder="John Smith" autocomplete="name" />
+      <input class="field-input" type="text" id="signup-name" placeholder="Nir Maman" autocomplete="name" />
     </div>
     <div class="field">
       <label class="field-label">Email</label>
@@ -280,7 +280,7 @@
 <!-- Firebase -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyB_w82VhilliRBcfge2dM7e3VGcQhdon78",
@@ -296,7 +296,12 @@
 
   // Expose auth to window for button handlers
   window._auth = auth;
-  window._firebase = { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup };
+  window._firebase = { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult };
+
+  // Handle redirect result on page load
+  getRedirectResult(auth).then(result => {
+    if (result?.user) window.location.replace('index.html');
+  }).catch(() => {});
 
   // If already logged in → go straight to calculator
   auth.onAuthStateChanged(user => {
@@ -386,10 +391,16 @@
   async function doGoogle() {
     clearMsg();
     try {
-      const { GoogleAuthProvider, signInWithPopup } = window._firebase;
+      const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = window._firebase;
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(window._auth, provider);
-      window.location.replace('index.html');
+      // Use redirect on mobile (Safari blocks popups), popup on desktop
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        await signInWithRedirect(window._auth, provider);
+      } else {
+        await signInWithPopup(window._auth, provider);
+        window.location.replace('index.html');
+      }
     } catch (e) {
       if (e.code !== 'auth/popup-closed-by-user') {
         showMsg(friendlyError(e.code), 'error');
