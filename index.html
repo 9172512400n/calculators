@@ -1,0 +1,3097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="description" content="Professional material calculators for asphalt, concrete, sand & gravel, curb & gutter, and measurements." />
+  <meta property="og:title" content="Maman Calculators" />
+  <meta property="og:description" content="Professional construction material calculators by Maman Contracting." />
+  <meta property="og:image" content="https://maman-calculators.vercel.app/maman-logo.jpg" />
+  <link rel="apple-touch-icon" href="maman-logo.jpg" />
+  <!-- Firebase Auth + Firestore -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const app = initializeApp({
+      apiKey: "AIzaSyB_w82VhilliRBcfge2dM7e3VGcQhdon78",
+      authDomain: "maman-calculators.firebaseapp.com",
+      projectId: "maman-calculators",
+      storageBucket: "maman-calculators.firebasestorage.app",
+      messagingSenderId: "460711658838",
+      appId: "1:460711658838:web:b6b560e4c3f2fb948102f7"
+    });
+
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    window._signOut = async () => {
+      try { await signOut(auth); } catch(e) {}
+      window.location.replace('auth.html');
+    };
+    window._db = db;
+
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        window.location.replace('auth.html');
+      } else {
+        window._uid = user.uid;
+        const name = user.displayName || user.email.split('@')[0];
+        const el = document.getElementById('user-name');
+        if (el) el.textContent = name;
+      }
+    });
+
+    // Save project to Firestore
+    window._saveProject = async (data) => {
+      const ref = collection(db, 'users', window._uid, 'projects');
+      await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+    };
+
+    // Load projects from Firestore
+    window._loadProjects = async () => {
+      const ref = collection(db, 'users', window._uid, 'projects');
+      const q   = query(ref, orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    };
+
+    // Delete project
+    window._deleteProject = async (id) => {
+      await deleteDoc(doc(db, 'users', window._uid, 'projects', id));
+    };
+
+    // Update project note
+    window._updateProjectNote = async (id, notes) => {
+      await updateDoc(doc(db, 'users', window._uid, 'projects', id), { notes });
+    };
+
+    // Add calculation to existing job
+    window._addCalcToJob = async (jobId, calc) => {
+      if (!window._uid) throw new Error('Not logged in');
+      const ref  = doc(db, 'users', window._uid, 'projects', jobId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Job not found');
+      const job   = snap.data();
+      const calcs = Array.isArray(job.calcs) ? [...job.calcs] : [];
+      calcs.push({ ...calc, savedAt: new Date().toISOString() });
+      const newTotalSF = calcs.reduce((s,c) => s + (Number(c.totalSF)||0), 0);
+      await updateDoc(ref, { calcs, totalSF: newTotalSF });
+    };
+
+    // Update full job
+    window._updateJob = async (jobId, data) => {
+      if (!window._uid) throw new Error('Not logged in');
+      const ref = doc(db, 'users', window._uid, 'projects', jobId);
+      await updateDoc(ref, data);
+    };
+  </script>
+  <title>Maman Calculators</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    /* ── NIGHT MODE (default) ── */
+    :root {
+      --bg:         #0f0f0f;
+      --bg2:        #161616;
+      --card:       #1c1c1e;
+      --card2:      #252528;
+      --border:     #2e2e33;
+      --text:       #ffffff;
+      --text2:      #aaaaaa;
+      --text3:      #555558;
+      --input-bg:   #111113;
+      --input-text: #ffffff;
+      --pill-bg:    #1c1c1e;
+      --pill-active:#e53935;
+      --result-val: #ffffff;
+      --note-text:  #666;
+      --nav-bg:     #1c1c1e;
+      --nav-border: #2e2e33;
+      --accent:     #e53935;
+      --green:      #4caf50;
+      --blue:       #1565c0;
+      --btn-clear-bg:  #3a0808;
+      --btn-clear-c:   #ff6b6b;
+      --btn-text-bg:   #0a3a0a;
+      --btn-text-c:    #4caf50;
+      --btn-email-bg:  #08143a;
+      --btn-email-c:   #5b9bd5;
+    }
+
+    /* ── DAY MODE ── */
+    body.day {
+      --bg:         #f0f0f3;
+      --bg2:        #e8e8ec;
+      --card:       #ffffff;
+      --card2:      #f5f5f8;
+      --border:     #d8d8de;
+      --text:       #0a0a0a;
+      --text2:      #333336;
+      --text3:      #888890;
+      --input-bg:   #f8f8fb;
+      --input-text: #0a0a0a;
+      --pill-bg:    #e0e0e5;
+      --pill-active:#e53935;
+      --result-val: #0a0a0a;
+      --note-text:  #666670;
+      --nav-bg:     #ffffff;
+      --nav-border: #d8d8de;
+      --accent:     #e53935;
+      --green:      #2e7d32;
+      --blue:       #0d47a1;
+      --btn-clear-bg:  #ffebee;
+      --btn-clear-c:   #c62828;
+      --btn-text-bg:   #e8f5e9;
+      --btn-text-c:    #1b5e20;
+      --btn-email-bg:  #e3f2fd;
+      --btn-email-c:   #0d47a1;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 20px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    /* ══════════════════ TOP BAR ══════════════════ */
+    .top-bar {
+      display: flex; align-items: center;
+      padding: 12px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
+    .brand-name { font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: 0.3px; }
+    .top-right { display: flex; align-items: center; gap: 8px; }
+    /* Full-screen Jobs panel */
+    .jobs-panel {
+      position: fixed; inset: 0; z-index: 400;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      transition: background 0.2s;
+      overflow: hidden;
+    }
+    .jobs-panel.hidden { display: none; }
+    .jobs-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+      flex-shrink: 0;
+    }
+    .jobs-panel-back {
+      background: none; border: none; cursor: pointer;
+      font-size: 15px; font-weight: 800; color: var(--accent);
+      padding: 4px; font-family: inherit;
+    }
+    .jobs-panel-title {
+      font-size: 17px; font-weight: 900; color: var(--text);
+    }
+    .jobs-panel-list {
+      flex: 1; overflow-y: auto; padding: 10px 0 80px;
+    }
+    /* job cards inside panel get side padding */
+    .jobs-panel-list .job-card-wrap { margin: 0 16px 12px; }
+    .jobs-panel-list .job-card { margin: 0; }
+
+    .jobs-quick-btn {
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 20px;
+      padding: 6px 12px; font-size: 13px; font-weight: 800;
+      cursor: pointer; transition: opacity 0.15s;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .jobs-quick-btn:active { opacity: 0.75; }
+    .user-btn {
+      width: 32px; height: 32px;
+      background: #e53935; border: none; border-radius: 50%;
+      font-size: 14px; cursor: pointer; color: #fff; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* User menu */
+    .user-menu {
+      position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.5);
+    }
+    .user-menu-card {
+      position: absolute; top: 70px; right: 16px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px; min-width: 200px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .user-menu-name {
+      font-size: 16px; font-weight: 800; color: var(--text);
+      margin-bottom: 12px; padding-bottom: 12px;
+    }
+    .user-menu-divider { height: 1px; background: var(--border); margin-bottom: 10px; }
+    .user-menu-btn {
+      display: block; width: 100%; padding: 12px 14px;
+      background: var(--card2); border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 700; color: var(--text2);
+      cursor: pointer; font-family: inherit; text-align: left;
+      margin-bottom: 8px; transition: opacity 0.15s;
+    }
+    .user-menu-btn:last-child { margin-bottom: 0; }
+    .user-menu-btn.logout { color: #ff6b6b; background: #3a0808; }
+    .user-menu-btn:active { opacity: 0.7; }
+
+    /* Toggle switch */
+    .toggle-switch {
+      width: 44px; height: 26px;
+      background: var(--border); border-radius: 13px;
+      cursor: pointer; position: relative; transition: background 0.2s;
+    }
+    .toggle-switch.on { background: #4caf50; }
+    .toggle-knob {
+      position: absolute; top: 3px; left: 3px;
+      width: 20px; height: 20px; background: #fff;
+      border-radius: 50%; transition: transform 0.2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .toggle-switch.on .toggle-knob { transform: translateX(18px); }
+
+    /* Signature input */
+    .sig-input {
+      width: 100%; background: var(--input-bg);
+      border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; font-size: 14px; color: var(--input-text);
+      outline: none; font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .sig-input:focus { border-color: var(--accent); }
+    .day-night-btn {
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 6px 12px;
+      font-size: 13px; cursor: pointer; font-weight: 700;
+      color: var(--text2); transition: all 0.2s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .day-night-btn:active { opacity: 0.7; }
+    .share-btn {
+      background: var(--accent); border: none;
+      border-radius: 20px; padding: 6px 14px;
+      font-size: 13px; cursor: pointer; font-weight: 800;
+      color: #fff; display: flex; align-items: center; gap: 5px;
+      transition: opacity 0.2s;
+    }
+    .share-btn:active { opacity: 0.75; }
+
+    /* Share toast */
+    .share-toast {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 20px;
+      border-radius: 20px; font-size: 14px; font-weight: 700;
+      z-index: 500; opacity: 0; transition: opacity 0.3s;
+      pointer-events: none; white-space: nowrap;
+    }
+    .share-toast.show { opacity: 1; }
+
+    /* ══════════════════ PILL TABS ══════════════════ */
+    .pill-wrap {
+      padding: 14px 16px 10px;
+      background: var(--bg);
+      transition: background 0.2s;
+    }
+    .pill-tabs {
+      display: flex; background: var(--pill-bg);
+      border-radius: 14px; padding: 4px; gap: 3px;
+      overflow-x: auto; scrollbar-width: none;
+      transition: background 0.2s;
+    }
+    .pill-tabs::-webkit-scrollbar { display: none; }
+    .pill-tab {
+      flex: 1; flex-shrink: 0; padding: 11px 8px;
+      border-radius: 10px; border: none;
+      font-size: 11px; font-weight: 800;
+      text-align: center; cursor: pointer;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      background: transparent; color: var(--text3);
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .pill-tab.active { background: var(--pill-active); color: #fff; }
+
+    /* ══════════════════ PAGES ══════════════════ */
+    .page { display: none; padding: 6px 16px 20px; }
+    .page.active { display: block; }
+
+    /* ══════════════════ QUICK SF TOGGLE ══════════════════ */
+    .sf-toggle-row {
+      display: flex; align-items: center; gap: 0;
+      background: var(--card2); border-radius: 12px;
+      margin-bottom: 12px; padding: 4px; overflow: hidden;
+    }
+    .sf-toggle-btn {
+      flex: 1; padding: 10px 8px;
+      border: none; border-radius: 8px;
+      font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
+      cursor: pointer; font-family: inherit; text-align: center;
+      background: transparent; color: var(--text3);
+      transition: all 0.15s; text-transform: uppercase;
+    }
+    .sf-toggle-btn.active { background: var(--accent); color: #fff; }
+
+    .quick-sf-row {
+      background: var(--card); border-radius: 16px;
+      padding: 16px; margin-bottom: 12px;
+      border: 2px solid var(--accent);
+    }
+    .quick-sf-label {
+      font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+    }
+    .quick-sf-input-wrap { display: flex; align-items: center; gap: 10px; }
+    .quick-sf-input {
+      flex: 1; background: var(--input-bg);
+      border: 1.5px solid var(--accent); border-radius: 12px;
+      padding: 14px 16px; font-size: 22px; font-weight: 800;
+      color: var(--text); outline: none; font-family: inherit;
+      transition: background 0.2s, color 0.2s;
+    }
+    .quick-sf-input::placeholder { color: var(--text3); font-size: 18px; font-weight: 400; }
+    .quick-sf-unit {
+      font-size: 14px; font-weight: 700; color: var(--text3); white-space: nowrap;
+    }
+
+    /* ══════════════════ SECTION CARD ══════════════════ */
+    .card {
+      background: var(--card); border-radius: 16px;
+      margin-bottom: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .card-label {
+      font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text3);
+      padding: 14px 16px 10px;
+      transition: color 0.2s;
+    }
+
+    /* ══════════════════ INPUT ROWS ══════════════════ */
+    .irow {
+      display: flex; align-items: center;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .irow:first-of-type { border-top: none; }
+    .irow-lbl {
+      flex: 1; font-size: 15px; font-weight: 700;
+      color: var(--text); letter-spacing: 0.2px;
+    }
+    .irow-lbl .opt { font-size: 11px; font-weight: 500; color: var(--text3); margin-left: 4px; }
+    .irow input {
+      width: 120px; text-align: right;
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px;
+      font-size: 16px; font-weight: 600; color: var(--input-text);
+      outline: none; font-family: inherit;
+      transition: border-color 0.15s, background 0.2s, color 0.2s;
+    }
+    .irow input::placeholder { color: var(--text3); font-weight: 400; font-size: 15px; }
+    .irow input:focus { border-color: var(--accent); }
+    .irow select {
+      width: 160px;
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 28px 10px 12px;
+      font-size: 13px; font-weight: 600; color: var(--input-text);
+      outline: none; appearance: none; font-family: inherit;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    /* ══════════════════ RESULTS CARD ══════════════════ */
+    .results-row {
+      display: flex; border-top: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .result-col {
+      flex: 1; padding: 14px 16px;
+      border-right: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .result-col:last-child { border-right: none; }
+    .result-lbl {
+      font-size: 10px; font-weight: 800; letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
+    }
+    .result-bar { height: 3px; width: 28px; border-radius: 2px; margin-bottom: 6px; }
+    .result-val {
+      font-size: 22px; font-weight: 900; color: var(--result-val);
+      transition: color 0.2s;
+    }
+    .result-extras { padding: 12px 16px; border-top: 1px solid var(--border); }
+    .result-extra-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 0;
+    }
+    .result-extra-lbl {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 700; color: var(--text2);
+    }
+    .result-extra-lbl .dot { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+    .result-extra-val { font-size: 15px; font-weight: 800; color: var(--text); }
+
+    /* ══════════════════ ACTION BUTTONS ══════════════════ */
+    .btn-group { display: flex; gap: 10px; margin-bottom: 10px; }
+    .abtn {
+      flex: 1; padding: 16px 8px;
+      border-radius: 14px; border: none;
+      font-size: 15px; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      transition: opacity 0.15s;
+    }
+    .abtn:active { opacity: 0.75; }
+    .abtn-calc  { background: var(--green); color: #fff; font-size: 17px; }
+    .abtn-clear { background: var(--btn-clear-bg); color: var(--btn-clear-c); }
+    .abtn-text  { background: var(--btn-text-bg);  color: var(--btn-text-c); }
+    .abtn-email { background: var(--btn-email-bg); color: var(--btn-email-c); }
+
+    /* ══════════════════ NOTE ══════════════════ */
+    .note {
+      background: var(--card); border-radius: 12px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--text3);
+      padding: 12px 14px; margin-bottom: 12px;
+      font-size: 12px; color: var(--note-text); line-height: 1.6;
+      transition: background 0.2s, color 0.2s;
+    }
+    .note strong { color: var(--text2); font-weight: 700; }
+
+    /* ══════════════════ CONCRETE MENU ══════════════════ */
+    .con-item {
+      display: flex; align-items: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px; margin-bottom: 10px;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .con-item:active { opacity: 0.7; }
+    .con-item .ci-icon { font-size: 22px; margin-right: 14px; }
+    .con-item .ci-name { flex: 1; font-size: 16px; font-weight: 700; color: var(--text); }
+    .con-item .ci-arr { font-size: 18px; color: var(--text3); font-weight: 700; }
+
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 0 14px; font-size: 15px; font-weight: 800;
+      color: var(--accent); background: none; border: none;
+      cursor: pointer; font-family: inherit;
+    }
+
+    /* ══════════════════ CONCRETE OUTPUT ══════════════════ */
+    .con-output { display: none; }
+    .con-output.show { display: block; }
+    .con-headline { font-size: 26px; font-weight: 900; color: var(--green); margin-bottom: 10px; }
+    .con-advisory { font-size: 14px; font-weight: 500; color: var(--text2); line-height: 1.65; margin-bottom: 8px; }
+    .con-bags-msg { font-size: 13px; color: var(--text3); line-height: 1.6; display: none; }
+    .con-bags-msg.show { display: block; }
+    .con-drow {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .con-drow:last-child { border: none; }
+    .con-drow .k { color: var(--text3); font-weight: 600; }
+    .con-drow .v { font-weight: 800; color: var(--text); }
+
+    /* ══════════════════ CURB DIAGRAM ══════════════════ */
+    .curb-diagram {
+      background: var(--card2); border-radius: 14px;
+      margin-bottom: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .curb-diagram svg { display: block; width: 100%; height: auto; }
+
+    /* ══════════════════ MEASUREMENTS ══════════════════ */
+    /* Save Job button on each calculator tab */
+    .save-job-tab-btn {
+      display: block; width: 100%;
+      background: #1565c0; color: #fff;
+      border: none; border-radius: 14px;
+      padding: 16px; font-size: 16px; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      margin-bottom: 12px; transition: opacity 0.15s;
+    }
+    .save-job-tab-btn:active { opacity: 0.8; }
+
+    /* Jobs page */
+    .jobs-header {
+      padding: 16px 16px 8px;
+      position: sticky; top: 0; z-index: 50;
+      background: var(--bg); transition: background 0.2s;
+    }
+    .jobs-title { font-size: 22px; font-weight: 900; color: var(--text); margin-bottom: 12px; }
+
+    /* Search bar */
+    .jobs-search-wrap {
+      display: flex; align-items: center;
+      background: var(--card); border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 0 14px;
+      margin-bottom: 10px; gap: 8px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .jobs-search-wrap:focus-within { border-color: var(--accent); }
+    .jobs-search-icon { font-size: 16px; color: var(--text3); flex-shrink: 0; }
+    .jobs-search-input {
+      flex: 1; border: none; outline: none;
+      background: transparent; font-size: 15px; font-weight: 500;
+      color: var(--text); padding: 13px 0; font-family: inherit;
+    }
+    .jobs-search-input::placeholder { color: var(--text3); }
+    .jobs-search-clear {
+      background: none; border: none; color: var(--text3);
+      font-size: 14px; cursor: pointer; padding: 4px; flex-shrink: 0;
+    }
+    .jobs-search-clear.hidden { display: none; }
+
+    /* Stats bar */
+    .jobs-stats {
+      display: flex; gap: 12px; margin-bottom: 8px;
+      font-size: 12px; color: var(--text3); font-weight: 700;
+      flex-wrap: wrap;
+    }
+    .jobs-stat-chip {
+      background: var(--card2); border-radius: 20px;
+      padding: 4px 12px; border: 1px solid var(--border);
+    }
+    .jobs-stat-chip span { color: var(--accent); font-weight: 900; }
+
+    /* Swipe-to-delete wrapper */
+    .job-card-wrap {
+      position: relative;
+      margin: 0 16px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .job-card-wrap .job-delete-reveal {
+      position: absolute;
+      right: 0; top: 0; bottom: 0;
+      width: 90px;
+      background: #c0392b;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 4px;
+      cursor: pointer; user-select: none;
+      font-size: 22px; color: #fff; font-weight: 800;
+    }
+    .job-card-wrap .job-delete-reveal span {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .job-card {
+      background: var(--card);
+      border-radius: 0;
+      overflow: hidden;
+      transition: transform 0.25s ease, background 0.2s;
+      position: relative; z-index: 1;
+      width: 100%;
+    }
+    .job-card.swiped { transform: translateX(-90px); }
+    .job-card-header {
+      display: flex; align-items: flex-start;
+      padding: 14px 16px; gap: 12px; cursor: pointer;
+    }
+    .job-card-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+    .job-card-body { flex: 1; }
+    .job-card-address { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+    .job-card-customer { font-size: 13px; color: var(--text2); font-weight: 600; }
+    .job-card-sf { font-size: 15px; font-weight: 900; color: var(--green); text-align: right; }
+    .job-card-date { font-size: 11px; color: var(--text3); text-align: right; margin-top: 2px; }
+
+    .job-card-details {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px; display: none;
+    }
+    .job-card-details.open { display: block; }
+    .job-detail-row {
+      display: flex; justify-content: space-between;
+      padding: 5px 0; font-size: 13px;
+      border-bottom: 1px solid var(--border2);
+    }
+    .job-detail-row:last-child { border: none; }
+    .job-detail-row .jk { color: var(--text3); font-weight: 600; }
+    .job-detail-row .jv { color: var(--text); font-weight: 700; }
+    .job-areas-list { font-size: 12px; color: var(--text2); line-height: 1.8; margin: 4px 0 0; }
+    .calc-entry {
+      background: var(--card2); border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 8px;
+      border-left: 3px solid var(--accent);
+    }
+    .calc-entry-header { font-size: 13px; color: var(--text2); margin-bottom: 4px; }
+
+    .job-actions {
+      display: flex; gap: 8px; padding: 10px 16px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .job-action-btn {
+      flex: 1; padding: 10px 6px;
+      border-radius: 10px; border: none;
+      font-size: 13px; font-weight: 800;
+      cursor: pointer; font-family: inherit; text-align: center;
+      transition: opacity 0.15s;
+    }
+    .job-action-btn:active { opacity: 0.75; }
+    .jab-load  { background: var(--card2); color: var(--text2); border: 1px solid var(--border); }
+    .jab-call  { background: #1a4a1a; color: #4caf50; font-size: 12px; letter-spacing: 0.3px; }
+    .jab-share { background: #1a1a4a; color: #7b9fd5; }
+    .abtn-share { background: #1a1a4a; color: #7b9fd5; }
+    .meas-btn-share { background: #1a1a4a; color: #7b9fd5; }
+    .jab-email { background: #08143a; color: #5b9bd5; }
+    .jab-del   { background: #3a0808; color: #ff6b6b; }
+
+    /* Full width save job button */
+    .proj-save-btn-full {
+      display: block; width: 100%;
+      background: #1565c0; color: #fff;
+      border: none; border-radius: 14px;
+      padding: 16px; font-size: 16px; font-weight: 800;
+      cursor: pointer; font-family: inherit; margin-bottom: 10px;
+      transition: opacity 0.15s;
+    }
+    .proj-save-btn-full:active { opacity: 0.8; }
+
+    /* Save job mode toggle */
+    .sj-mode-row {
+      display: flex; gap: 8px; margin-bottom: 18px;
+    }
+    .sj-mode-btn {
+      flex: 1; padding: 12px 8px;
+      border-radius: 12px; border: 1.5px solid var(--border);
+      background: var(--card2); color: var(--text2);
+      font-size: 14px; font-weight: 800; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .sj-mode-btn.active { background: #1565c0; color: #fff; border-color: #1565c0; }
+
+    /* Existing job picker list */
+    .sj-job-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 12px; background: var(--card2);
+      border: 1.5px solid var(--border); border-radius: 12px;
+      margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .sj-job-option.selected { border-color: #4caf50; background: var(--accent-bg, #1a2a1a); }
+    .sj-job-option:active { opacity: 0.75; }
+    .sj-job-opt-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .sj-job-opt-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .sj-job-opt-check { margin-left: auto; font-size: 18px; color: #4caf50; display: none; }
+    .sj-job-option.selected .sj-job-opt-check { display: block; }
+
+    /* Address autocomplete */
+    .addr-suggestions {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 999;
+      background: var(--card); border: 1.5px solid var(--accent);
+      border-top: none; border-radius: 0 0 12px 12px;
+      overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+    .addr-suggestions.hidden { display: none; }
+    .addr-suggestion {
+      padding: 12px 14px; font-size: 14px; font-weight: 600;
+      color: var(--text); cursor: pointer;
+      border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px;
+    }
+    .addr-suggestion:last-child { border: none; }
+    .addr-suggestion:active { background: var(--card2); }
+    .addr-suggestion .addr-icon { font-size: 16px; flex-shrink: 0; }
+    .addr-suggestion .addr-main { font-weight: 700; }
+    .addr-suggestion .addr-secondary { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    /* Note editor on job card */
+    .job-note-editor {
+      background: var(--input-bg); border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; width: 100%;
+      font-size: 13px; color: var(--input-text); font-family: inherit;
+      resize: none; min-height: 70px; outline: none; margin-top: 6px;
+      transition: border-color 0.2s;
+    }
+    .job-note-editor:focus { border-color: var(--accent); }
+    .note-save-btn {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; padding: 8px 16px; font-size: 13px;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+      margin-top: 6px; transition: opacity 0.15s;
+    }
+    .note-save-btn:active { opacity: 0.8; }
+
+    /* Save job sheet fields */
+    .save-job-field { margin-bottom: 14px; }
+    .save-job-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
+    }
+    .save-job-input {
+      width: 100%; background: var(--input-bg);
+      border: 1.5px solid var(--border); border-radius: 12px;
+      padding: 13px 14px; font-size: 15px; color: var(--input-text);
+      outline: none; font-family: inherit;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .save-job-input:focus { border-color: #1565c0; }
+    .save-job-textarea {
+      min-height: 80px; resize: none; line-height: 1.5;
+    }
+    .save-job-summary {
+      background: var(--card2); border-radius: 10px;
+      padding: 12px 14px; font-size: 13px; color: var(--text2);
+      line-height: 1.7; border-left: 3px solid var(--green);
+    }
+
+    /* Project save bar */
+    .proj-header-row {
+      display: flex; gap: 10px; align-items: center;
+      margin-bottom: 8px;
+    }
+    .proj-field-wrap { flex: 1; }
+    .proj-name-input {
+      width: 100%; background: var(--card);
+      border: 1.5px solid var(--accent); border-radius: 12px;
+      padding: 12px 14px; font-size: 15px; font-weight: 600;
+      color: var(--text); outline: none; font-family: inherit;
+      transition: background 0.2s, color 0.2s;
+    }
+    .proj-name-input::placeholder { color: var(--text3); font-weight: 400; }
+    .proj-save-btn {
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      padding: 12px 16px; font-size: 14px; font-weight: 800;
+      cursor: pointer; white-space: nowrap; font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    .proj-save-btn:active { opacity: 0.75; }
+    .proj-list-btn {
+      width: 100%; background: var(--card2);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 11px 14px; font-size: 14px; font-weight: 700;
+      color: var(--text2); cursor: pointer; margin-bottom: 12px;
+      font-family: inherit; text-align: left; transition: opacity 0.15s;
+    }
+    .proj-list-btn:active { opacity: 0.75; }
+
+    /* Project list item */
+    .proj-item {
+      display: flex; align-items: center;
+      background: var(--card2); border-radius: 12px;
+      padding: 14px; margin-bottom: 8px;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .proj-item:active { opacity: 0.7; }
+    .proj-item-body { flex: 1; }
+    .proj-item-name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .proj-item-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
+    .proj-item-sf { font-size: 14px; font-weight: 800; color: var(--green); margin-right: 12px; white-space: nowrap; }
+    .proj-item-del {
+      width: 28px; height: 28px; background: #3a0808;
+      border: none; border-radius: 50%; font-size: 12px;
+      color: var(--accent); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .meas-section-lbl {
+      font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text3); padding: 4px 0 8px;
+    }
+    .area-row {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card); border-radius: 12px;
+      padding: 10px 12px; margin-bottom: 8px;
+      border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .area-num {
+      width: 24px; height: 24px; background: var(--accent); border-radius: 50%;
+      font-size: 11px; font-weight: 800; color: #fff;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .area-name-input {
+      flex: 1.2; border: none; outline: none;
+      font-size: 14px; font-weight: 700; color: var(--text);
+      background: transparent; min-width: 0; font-family: inherit;
+      transition: color 0.2s;
+    }
+    .area-name-input::placeholder { color: var(--text3); font-weight: 400; }
+    .area-dim { display: flex; align-items: center; gap: 4px; flex: 1.4; }
+    .area-dim input {
+      width: 48px; border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 4px; font-size: 14px; color: var(--input-text);
+      text-align: center; outline: none; background: var(--input-bg);
+      font-family: inherit; font-weight: 600; transition: background 0.2s, color 0.2s;
+    }
+    .area-dim input:focus { border-color: var(--accent); }
+    .area-dim .x-sep { font-size: 13px; color: var(--text3); font-weight: 800; }
+    .area-dim .dim-unit { font-size: 10px; color: var(--text3); font-weight: 600; }
+    .area-sf { width: 62px; text-align: right; font-size: 13px; font-weight: 800; color: var(--green); flex-shrink: 0; }
+    .area-del {
+      width: 26px; height: 26px; background: var(--btn-clear-bg); border: none;
+      border-radius: 50%; font-size: 12px; color: var(--accent); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .add-area-btn {
+      width: 100%; background: transparent; border: 1.5px dashed var(--border);
+      border-radius: 12px; padding: 13px; font-size: 14px; font-weight: 800;
+      color: var(--text3); cursor: pointer; margin-bottom: 12px; font-family: inherit;
+      transition: background 0.15s, color 0.2s;
+    }
+    .add-area-btn:active { background: var(--card2); }
+
+    .meas-summary {
+      background: var(--card); border-radius: 14px; padding: 14px 16px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .meas-sum-lbl { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+    .meas-sum-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .meas-sum-row:last-child { border: none; }
+    .meas-sum-row .sk { color: var(--text2); font-weight: 600; }
+    .meas-sum-row .sv { font-weight: 800; color: var(--text); }
+    .meas-sum-row .sv.green { color: var(--green); font-size: 19px; }
+    .meas-sum-row .sv.amber { color: #f59e0b; }
+
+    .meas-price-card {
+      background: var(--card); border-radius: 14px; padding: 14px 16px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .meas-price-lbl { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; }
+    .meas-price-row {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .meas-price-row label { font-size: 14px; font-weight: 700; color: var(--text2); }
+    .meas-price-row input {
+      width: 120px; background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; font-size: 15px; font-weight: 700;
+      color: var(--input-text); text-align: right; outline: none; font-family: inherit;
+      transition: background 0.2s, color 0.2s;
+    }
+    .meas-total-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--card2); border-radius: 10px; padding: 14px;
+      transition: background 0.2s;
+    }
+    .meas-total-lbl { font-size: 14px; font-weight: 700; color: var(--text2); }
+    .meas-total-val { font-size: 22px; font-weight: 900; color: var(--green); }
+
+    .meas-to-calc-btn {
+      display: block; width: 100%; padding: 17px; margin-bottom: 12px;
+      background: #0d47a1; color: #fff;
+      font-size: 16px; font-weight: 800; font-family: inherit;
+      border: none; border-radius: 14px; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .meas-to-calc-btn:active { opacity: 0.8; }
+
+    /* ══════════════════ PICKER SHEET ══════════════════ */
+    .picker-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 999; display: flex; align-items: flex-end;
+    }
+    .picker-sheet {
+      width: 100%; background: var(--card);
+      border-radius: 22px 22px 0 0; padding: 12px 16px 40px;
+      transition: background 0.2s;
+    }
+    .picker-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+    .picker-title { font-size: 18px; font-weight: 900; color: var(--text); text-align: center; margin-bottom: 4px; }
+    .picker-title span { color: var(--green); }
+    .picker-sub { font-size: 12px; color: var(--text3); text-align: center; margin-bottom: 18px; }
+    .picker-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 12px; background: var(--card2);
+      border-radius: 12px; margin-bottom: 8px; cursor: pointer;
+      border: 1px solid var(--border); transition: opacity 0.12s;
+    }
+    .picker-item:active { opacity: 0.7; }
+    .picker-item-icon { font-size: 22px; flex-shrink: 0; }
+    .picker-item-body { flex: 1; }
+    .picker-item-name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .picker-item-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .picker-arr { color: var(--text3); font-size: 18px; font-weight: 700; }
+    .picker-cancel {
+      display: block; width: 100%; margin-top: 10px; padding: 14px;
+      background: var(--card2); border: none; border-radius: 12px;
+      font-size: 15px; font-weight: 700; color: var(--text3); cursor: pointer; font-family: inherit;
+    }
+
+
+
+    /* ══════════════════ HIDDEN ══════════════════ */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ─── TOP BAR ─── -->
+<div class="top-bar">
+  <div class="brand">
+    <img src="maman-logo.jpg" alt="Maman" />
+    <span class="brand-name">Maman Calculators</span>
+  </div>
+  <div class="top-right">
+    <button class="jobs-quick-btn" onclick="openJobsPanel()">📋 Jobs</button>
+    <button class="day-night-btn" id="theme-btn" onclick="toggleTheme()">🌙</button>
+    <button class="user-btn" onclick="showUserMenu()" id="user-avatar">👤</button>
+  </div>
+</div>
+
+<!-- User menu -->
+<div class="user-menu hidden" id="user-menu" onclick="hideUserMenu()">
+  <div class="user-menu-card" onclick="event.stopPropagation()">
+    <div class="user-menu-name" id="user-name">—</div>
+    <div class="user-menu-divider"></div>
+    <button class="user-menu-btn" onclick="hideUserMenu(); showSettings()">⚙️ Settings</button>
+    <button class="user-menu-btn" onclick="shareApp()">↗ Share App</button>
+    <button class="user-menu-btn logout" onclick="window._signOut()">Sign Out</button>
+  </div>
+</div>
+
+<!-- Settings panel -->
+<div class="user-menu hidden" id="settings-menu" onclick="hideSettings()">
+  <div class="user-menu-card" onclick="event.stopPropagation()" style="min-width:280px;">
+    <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:14px;">⚙️ Settings</div>
+    <div class="user-menu-divider"></div>
+
+    <!-- Signature toggle -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">✍️ Email / Text Signature</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">Add signature</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Appended to all emails &amp; texts</div>
+        </div>
+        <div class="toggle-switch" id="sig-toggle" onclick="toggleSignature()">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+      <input class="sig-input" type="text" id="sig-text" placeholder="e.g. Nir Maman — Maman Contracting" oninput="saveSignature()" />
+    </div>
+
+    <div class="user-menu-divider"></div>
+    <button class="user-menu-btn" onclick="hideSettings()">Close</button>
+  </div>
+</div>
+
+<div class="share-toast" id="share-toast">Link copied! 📋</div>
+
+<!-- ─── PILL TABS ─── -->
+<div class="pill-wrap">
+  <div class="pill-tabs">
+    <button class="pill-tab active" onclick="switchTab('asphalt',this)">Asphalt</button>
+    <button class="pill-tab" onclick="switchTab('concrete',this)">Concrete</button>
+    <button class="pill-tab" onclick="switchTab('sand',this)">Sand &amp; Gravel</button>
+    <button class="pill-tab" onclick="switchTab('curb',this)">Curb &amp; Gutter</button>
+    <button class="pill-tab" onclick="switchTab('meas',this)">Measurements</button>
+    <button class="pill-tab" onclick="switchTab('jobs',this)">📋 Jobs</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     ASPHALT
+════════════════════════════════════ -->
+<div class="page active" id="page-asphalt">
+
+  <!-- Quick SF toggle -->
+  <div class="sf-toggle-row">
+    <button class="sf-toggle-btn active" onclick="aspMode('dims',this)">Width × Length</button>
+    <button class="sf-toggle-btn" onclick="aspMode('sf',this)">Quick SF</button>
+  </div>
+
+  <!-- Quick SF input -->
+  <div class="quick-sf-row hidden" id="asp-sf-row">
+    <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+    <div class="quick-sf-input-wrap">
+      <input class="quick-sf-input" type="number" id="asp-quick-sf" placeholder="e.g. 5000" inputmode="decimal" />
+      <span class="quick-sf-unit">ft²</span>
+    </div>
+  </div>
+
+  <div class="card" id="asp-dims-card">
+    <div class="card-label">Inputs</div>
+    <div class="irow"><span class="irow-lbl">Width</span><input type="number" id="asp-width" placeholder="feet" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Length</span><input type="number" id="asp-length" placeholder="feet" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Thickness</span><input type="number" id="asp-depth" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Cost per ton <span class="opt">optional</span></span><input type="number" id="asp-cost" placeholder="$" inputmode="decimal" /></div>
+  </div>
+
+  <!-- Thickness + cost for quick SF mode -->
+  <div class="card hidden" id="asp-sf-extra">
+    <div class="card-label">Additional Inputs</div>
+    <div class="irow" style="border-top:none;"><span class="irow-lbl">Thickness</span><input type="number" id="asp-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Cost per ton <span class="opt">optional</span></span><input type="number" id="asp-sf-cost" placeholder="$" inputmode="decimal" /></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Results</div>
+    <div class="results-row">
+      <div class="result-col">
+        <div class="result-lbl">Cubic Yards</div>
+        <div class="result-bar" style="background:#ffffff44;"></div>
+        <div class="result-val" id="asp-r-yards">—</div>
+      </div>
+      <div class="result-col">
+        <div class="result-lbl">Hot Mix (Tons)</div>
+        <div class="result-bar" style="background:var(--accent);"></div>
+        <div class="result-val" id="asp-r-tons">—</div>
+      </div>
+    </div>
+    <div class="result-extras">
+      <div class="result-extra-row">
+        <div class="result-extra-lbl"><span class="dot" style="background:var(--green);"></span>Total Cost</div>
+        <div class="result-extra-val" id="asp-r-cost">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="abtn abtn-calc" onclick="calcAsphalt()">Calculate</button>
+  </div>
+  <div class="btn-group">
+    <button class="abtn abtn-clear" onclick="clearAsphalt()">Clear</button>
+    <button class="abtn abtn-share" onclick="shareCalc(_aspBody(),'Asphalt Estimate')">↗ Share</button>
+  </div>
+
+  <button class="save-job-tab-btn" onclick="openSaveJobFrom('asphalt')">💾 Save Job</button>
+  <div class="note"><strong>NOTE:</strong> Estimating tool only. Add 5–10% for waste. Hot mix density: 145 lb/ft³.</div>
+</div>
+
+<!-- ════════════════════════════════════
+     CONCRETE
+════════════════════════════════════ -->
+<div class="page" id="page-concrete">
+
+  <div id="con-menu-screen">
+
+    <!-- Quick SF toggle at menu level -->
+    <div class="sf-toggle-row">
+      <button class="sf-toggle-btn active" id="con-menu-dims-btn" onclick="conMenuMode('dims',this)">Full Dimensions</button>
+      <button class="sf-toggle-btn" id="con-menu-sf-btn" onclick="conMenuMode('sf',this)">⚡ Quick SF</button>
+    </div>
+
+    <!-- Quick SF panel (shown when Quick SF selected) -->
+    <div class="hidden" id="con-menu-sf-panel">
+      <div class="quick-sf-row">
+        <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+        <div class="quick-sf-input-wrap">
+          <input class="quick-sf-input" type="number" id="con-menu-quick-sf" placeholder="e.g. 5000" inputmode="decimal" />
+          <span class="quick-sf-unit">ft²</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Additional Inputs</div>
+        <div class="irow" style="border-top:none;"><span class="irow-lbl">Thickness / Depth</span><input type="number" id="con-menu-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Mix Strength</span>
+          <select id="con-menu-sf-mix">
+            <option value="3000">3000 PSI</option>
+            <option value="3500">3500 PSI</option>
+            <option value="4000">4000 PSI</option>
+            <option value="5000">5000 PSI</option>
+          </select>
+        </div>
+        <div class="irow"><span class="irow-lbl">Cost per yard <span class="opt">optional</span></span><input type="number" id="con-menu-sf-cost" placeholder="$" inputmode="decimal" /></div>
+      </div>
+      <div class="btn-group"><button class="abtn abtn-calc" onclick="calcConQuickSF()">Calculate</button></div>
+      <div class="btn-group">
+        <button class="abtn abtn-clear" onclick="clearConQuickSF()">Clear</button>
+        <button class="abtn abtn-text"  onclick="textConQuickSF()">📱 Text</button>
+        <button class="abtn abtn-email" onclick="emailConQuickSF()">📧 Email</button>
+      </div>
+      <!-- Output -->
+      <div class="con-output" id="con-menu-output">
+        <div class="card" style="padding:16px;">
+          <div class="con-headline" id="con-menu-headline"></div>
+          <div class="con-advisory" id="con-menu-advisory"></div>
+          <div class="con-bags-msg" id="con-menu-bags-msg"></div>
+          <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+            <div class="con-drow"><span class="k">Volume</span><span class="v" id="con-menu-cuft">—</span></div>
+            <div class="con-drow"><span class="k">+8% waste</span><span class="v" id="con-menu-waste">—</span></div>
+            <div class="con-drow"><span class="k">Mix strength</span><span class="v" id="con-menu-psi">—</span></div>
+            <div class="con-drow" id="con-menu-cost-row"><span class="k">Estimated cost</span><span class="v" id="con-menu-cost-val">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu items (shown when Full Dimensions selected) -->
+    <div id="con-menu-items">
+      <div class="con-item" onclick="openConSub('slab')"><span class="ci-icon">⬜</span><span class="ci-name">Concrete Slab</span><span class="ci-arr">›</span></div>
+      <div class="con-item" onclick="openConSub('wall')"><span class="ci-icon">🧱</span><span class="ci-name">Concrete Wall</span><span class="ci-arr">›</span></div>
+      <div class="con-item" onclick="openConSub('footing')"><span class="ci-icon">🔩</span><span class="ci-name">Concrete Footing</span><span class="ci-arr">›</span></div>
+      <div class="con-item" onclick="openConSub('column')"><span class="ci-icon">🏛</span><span class="ci-name">Concrete Column</span><span class="ci-arr">›</span></div>
+      <div class="con-item" onclick="openConSub('circle')"><span class="ci-icon">⭕</span><span class="ci-name">Circle Slab</span><span class="ci-arr">›</span></div>
+      <div class="con-item" onclick="openConSub('stairs')"><span class="ci-icon">🪜</span><span class="ci-name">Concrete Stairs</span><span class="ci-arr">›</span></div>
+    </div>
+
+    <div class="note"><strong>NOTE:</strong> Always add 8–10% for waste. Cure minimum 7 days.</div>
+  </div>
+
+  <div id="con-sub-screen" class="hidden">
+    <button class="back-btn" onclick="closeConSub()">← Back</button>
+
+    <div id="con-sub-lwt" class="hidden">
+
+      <!-- Quick SF toggle (only for slab/wall/footing) -->
+      <div class="sf-toggle-row" id="con-sf-toggle">
+        <button class="sf-toggle-btn active" onclick="conMode('dims',this)">Width × Length</button>
+        <button class="sf-toggle-btn" onclick="conMode('sf',this)">Quick SF</button>
+      </div>
+
+      <!-- Quick SF input -->
+      <div class="quick-sf-row hidden" id="con-sf-row">
+        <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+        <div class="quick-sf-input-wrap">
+          <input class="quick-sf-input" type="number" id="con-quick-sf" placeholder="e.g. 5000" inputmode="decimal" />
+          <span class="quick-sf-unit">ft²</span>
+        </div>
+      </div>
+      <!-- SF thickness -->
+      <div class="card hidden" id="con-sf-extra">
+        <div class="irow" style="border-top:none;"><span class="irow-lbl" id="con-sf-depth-lbl">Thickness</span><input type="number" id="con-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+      </div>
+
+      <div class="card" id="con-dims-card">
+        <div class="card-label" id="con-sub-title">Concrete Slab</div>
+        <div class="irow"><span class="irow-lbl" id="con-lwt-d1-lbl">Length</span><input type="number" id="con-lwt-length" placeholder="feet" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl" id="con-lwt-d2-lbl">Width</span><input type="number" id="con-lwt-height" placeholder="feet" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl" id="con-lwt-d3-lbl">Thickness</span><input type="number" id="con-lwt-thickness" placeholder="inches" inputmode="decimal" /></div>
+      </div>
+    </div>
+    <!-- COLUMN -->
+    <div id="con-sub-col" class="hidden">
+      <div class="sf-toggle-row">
+        <button class="sf-toggle-btn active" onclick="conColMode('dims',this)">Diameter × Height</button>
+        <button class="sf-toggle-btn" onclick="conColMode('sf',this)">Quick SF</button>
+      </div>
+      <!-- Quick SF for column: SF of footprint + height -->
+      <div class="quick-sf-row hidden" id="con-col-sf-row">
+        <div class="quick-sf-label">⚡ Enter Footprint SF</div>
+        <div class="quick-sf-input-wrap">
+          <input class="quick-sf-input" type="number" id="con-col-quick-sf" placeholder="e.g. 200" inputmode="decimal" />
+          <span class="quick-sf-unit">ft²</span>
+        </div>
+      </div>
+      <div class="card hidden" id="con-col-sf-extra">
+        <div class="irow" style="border-top:none;"><span class="irow-lbl">Height (ft)</span><input type="number" id="con-col-sf-h" placeholder="feet" inputmode="decimal" /></div>
+      </div>
+      <div class="card" id="con-col-dims-card">
+        <div class="card-label">Concrete Column</div>
+        <div class="irow"><span class="irow-lbl">Diameter (ft)</span><input type="number" id="con-col2-dia" placeholder="feet" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Height (ft)</span><input type="number" id="con-col2-h" placeholder="feet" inputmode="decimal" /></div>
+      </div>
+    </div>
+
+    <!-- CIRCLE SLAB -->
+    <div id="con-sub-circ" class="hidden">
+      <div class="sf-toggle-row">
+        <button class="sf-toggle-btn active" onclick="conCircMode('dims',this)">Diameter × Thickness</button>
+        <button class="sf-toggle-btn" onclick="conCircMode('sf',this)">Quick SF</button>
+      </div>
+      <div class="quick-sf-row hidden" id="con-circ-sf-row">
+        <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+        <div class="quick-sf-input-wrap">
+          <input class="quick-sf-input" type="number" id="con-circ-quick-sf" placeholder="e.g. 500" inputmode="decimal" />
+          <span class="quick-sf-unit">ft²</span>
+        </div>
+      </div>
+      <div class="card hidden" id="con-circ-sf-extra">
+        <div class="irow" style="border-top:none;"><span class="irow-lbl">Thickness (in)</span><input type="number" id="con-circ-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+      </div>
+      <div class="card" id="con-circ-dims-card">
+        <div class="card-label">Circle Slab</div>
+        <div class="irow"><span class="irow-lbl">Diameter (ft)</span><input type="number" id="con-circ2-dia" placeholder="feet" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Thickness (in)</span><input type="number" id="con-circ2-depth" placeholder="inches" inputmode="decimal" /></div>
+      </div>
+    </div>
+
+    <!-- STAIRS -->
+    <div id="con-sub-stairs" class="hidden">
+      <div class="sf-toggle-row">
+        <button class="sf-toggle-btn active" onclick="conStairMode('dims',this)">Full Dimensions</button>
+        <button class="sf-toggle-btn" onclick="conStairMode('sf',this)">Quick SF</button>
+      </div>
+      <div class="quick-sf-row hidden" id="con-stair-sf-row">
+        <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+        <div class="quick-sf-input-wrap">
+          <input class="quick-sf-input" type="number" id="con-stair-quick-sf" placeholder="e.g. 100" inputmode="decimal" />
+          <span class="quick-sf-unit">ft²</span>
+        </div>
+      </div>
+      <div class="card hidden" id="con-stair-sf-extra">
+        <div class="irow" style="border-top:none;"><span class="irow-lbl">Avg. depth (in)</span><input type="number" id="con-stair-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+      </div>
+      <div class="card" id="con-stair-dims-card">
+        <div class="card-label">Concrete Stairs</div>
+        <div class="irow"><span class="irow-lbl">Rise per step (in)</span><input type="number" id="con-st-rise" placeholder="inches" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Run per step (in)</span><input type="number" id="con-st-run" placeholder="inches" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Width (ft)</span><input type="number" id="con-st-width" placeholder="feet" inputmode="decimal" /></div>
+        <div class="irow"><span class="irow-lbl">Number of steps</span><input type="number" id="con-st-steps" placeholder="0" inputmode="decimal" /></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="irow" style="border-top:none;"><span class="irow-lbl">Mix Strength</span>
+        <select id="con2-mix">
+          <option value="3000">3000 PSI</option>
+          <option value="3500">3500 PSI</option>
+          <option value="4000">4000 PSI</option>
+          <option value="5000">5000 PSI</option>
+        </select>
+      </div>
+      <div class="irow"><span class="irow-lbl">Cost per yard <span class="opt">optional</span></span><input type="number" id="con2-cost" placeholder="$" inputmode="decimal" /></div>
+    </div>
+
+    <div class="btn-group">
+      <button class="abtn abtn-calc" onclick="calcConcrete2()">Calculate</button>
+    </div>
+    <div class="btn-group">
+      <button class="abtn abtn-clear" onclick="clearConcrete2()">Clear</button>
+      <button class="abtn abtn-share" onclick="shareCalc(_conBody(),conSubTitles[conSubType]+' Estimate')">↗ Share</button>
+    </div>
+
+    <div class="con-output" id="con2-output">
+      <div class="card" style="padding:16px;">
+        <div class="con-headline" id="con2-headline"></div>
+        <div class="con-advisory" id="con2-advisory"></div>
+        <div class="con-bags-msg" id="con2-bags-msg"></div>
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+          <div class="con-drow"><span class="k">Volume</span><span class="v" id="con2-r-cuft">—</span></div>
+          <div class="con-drow"><span class="k">+8% waste</span><span class="v" id="con2-r-waste">—</span></div>
+          <div class="con-drow"><span class="k">Mix strength</span><span class="v" id="con2-r-psi">—</span></div>
+          <div class="con-drow" id="con2-cost-row"><span class="k">Estimated cost</span><span class="v" id="con2-r-cost">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="save-job-tab-btn" onclick="openSaveJobFrom('concrete')">💾 Save Job</button>
+    <div class="note"><strong>NOTE:</strong> Always add 8–10% for waste. Cure minimum 7 days.</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     SAND & GRAVEL
+════════════════════════════════════ -->
+<div class="page" id="page-sand">
+
+  <!-- Quick SF toggle -->
+  <div class="sf-toggle-row">
+    <button class="sf-toggle-btn active" onclick="sndMode('dims',this)">Width × Length</button>
+    <button class="sf-toggle-btn" onclick="sndMode('sf',this)">Quick SF</button>
+  </div>
+
+  <!-- Quick SF input -->
+  <div class="quick-sf-row hidden" id="snd-sf-row">
+    <div class="quick-sf-label">⚡ Enter Total Square Footage</div>
+    <div class="quick-sf-input-wrap">
+      <input class="quick-sf-input" type="number" id="snd-quick-sf" placeholder="e.g. 5000" inputmode="decimal" />
+      <span class="quick-sf-unit">ft²</span>
+    </div>
+  </div>
+
+  <div class="card" id="snd-dims-card">
+    <div class="card-label">Inputs</div>
+    <div class="irow"><span class="irow-lbl">Width</span><input type="number" id="snd-width" placeholder="feet" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Length</span><input type="number" id="snd-length" placeholder="feet" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Thickness</span><input type="number" id="snd-depth" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Material</span>
+      <select id="snd-material" onchange="toggleSndOther()">
+        <option value="100">Concrete Sand</option>
+        <option value="96">Masonry Sand</option>
+        <option value="105">#8 Gravel</option>
+        <option value="100">#67 Gravel</option>
+        <option value="98">2-inch Gravel</option>
+        <option value="100">#57 Bluestone</option>
+        <option value="100">#67 Bluestone</option>
+        <option value="98">#7 Bluestone</option>
+        <option value="96">#8 Bluestone</option>
+        <option value="110">CR6 Bluestone</option>
+        <option value="70">¾ Lightweight</option>
+        <option value="95">Stone Dust</option>
+        <option value="0">Other…</option>
+      </select>
+    </div>
+    <div class="irow hidden" id="snd-other-field"><span class="irow-lbl">Density (lb/ft³)</span><input type="number" id="snd-custom-density" placeholder="100" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Cost per ton <span class="opt">optional</span></span><input type="number" id="snd-cost" placeholder="$" inputmode="decimal" /></div>
+  </div>
+
+  <!-- SF extra: material + thickness + cost -->
+  <div class="card hidden" id="snd-sf-extra">
+    <div class="card-label">Additional Inputs</div>
+    <div class="irow" style="border-top:none;"><span class="irow-lbl">Material</span>
+      <select id="snd-sf-material">
+        <option value="100">Concrete Sand</option>
+        <option value="96">Masonry Sand</option>
+        <option value="105">#8 Gravel</option>
+        <option value="100">#67 Gravel</option>
+        <option value="98">2-inch Gravel</option>
+        <option value="100">#57 Bluestone</option>
+        <option value="100">#67 Bluestone</option>
+        <option value="98">#7 Bluestone</option>
+        <option value="96">#8 Bluestone</option>
+        <option value="110">CR6 Bluestone</option>
+        <option value="70">¾ Lightweight</option>
+        <option value="95">Stone Dust</option>
+      </select>
+    </div>
+    <div class="irow"><span class="irow-lbl">Thickness</span><input type="number" id="snd-sf-depth" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Cost per ton <span class="opt">optional</span></span><input type="number" id="snd-sf-cost" placeholder="$" inputmode="decimal" /></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Results</div>
+    <div class="results-row">
+      <div class="result-col">
+        <div class="result-lbl">Tons</div>
+        <div class="result-bar" style="background:#ffffff44;"></div>
+        <div class="result-val" id="snd-r-tons">—</div>
+      </div>
+      <div class="result-col">
+        <div class="result-lbl">Cubic Yards</div>
+        <div class="result-bar" style="background:var(--green);"></div>
+        <div class="result-val" id="snd-r-yards">—</div>
+      </div>
+    </div>
+    <div class="result-extras">
+      <div class="result-extra-row">
+        <div class="result-extra-lbl"><span class="dot" style="background:var(--green);"></span>Total Cost</div>
+        <div class="result-extra-val" id="snd-r-cost">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="abtn abtn-calc" onclick="calcSand()">Calculate</button>
+  </div>
+  <div class="btn-group">
+    <button class="abtn abtn-clear" onclick="clearSand()">Clear</button>
+    <button class="abtn abtn-share" onclick="shareCalc(_sndBody(),'Sand & Gravel Estimate')">↗ Share</button>
+  </div>
+
+  <button class="save-job-tab-btn" onclick="openSaveJobFrom('sand')">💾 Save Job</button>
+  <div class="note"><strong>NOTE:</strong> Estimating tool only. Results vary with moisture content.</div>
+</div>
+
+<!-- ════════════════════════════════════
+     CURB & GUTTER
+════════════════════════════════════ -->
+<div class="page" id="page-curb">
+
+  <!-- Quick SF toggle -->
+  <div class="sf-toggle-row">
+    <button class="sf-toggle-btn active" onclick="curbMode('dims',this)">Full Dimensions</button>
+    <button class="sf-toggle-btn" onclick="curbMode('sf',this)">⚡ Quick Linear Ft</button>
+  </div>
+
+  <!-- Quick Linear Ft panel -->
+  <div class="hidden" id="curb-sf-panel">
+    <div class="quick-sf-row">
+      <div class="quick-sf-label">⚡ Enter Linear Feet of Curb</div>
+      <div class="quick-sf-input-wrap">
+        <input class="quick-sf-input" type="number" id="curb-quick-lf" placeholder="e.g. 500" inputmode="decimal" />
+        <span class="quick-sf-unit">lin ft</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Standard Dimensions (editable)</div>
+      <div class="irow" style="border-top:none;"><span class="irow-lbl">Curb Depth (in)</span><input type="number" id="curb-q-depth" value="6" inputmode="decimal" /></div>
+      <div class="irow"><span class="irow-lbl">Curb Height (in)</span><input type="number" id="curb-q-height" value="8" inputmode="decimal" /></div>
+      <div class="irow"><span class="irow-lbl">Gutter Width (in)</span><input type="number" id="curb-q-gutter" value="18" inputmode="decimal" /></div>
+      <div class="irow"><span class="irow-lbl">Flag Thickness (in)</span><input type="number" id="curb-q-flag" value="6" inputmode="decimal" /></div>
+      <div class="irow"><span class="irow-lbl">Cost per yard <span class="opt">optional</span></span><input type="number" id="curb-q-cost" placeholder="$" inputmode="decimal" /></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Results</div>
+      <div class="results-row">
+        <div class="result-col">
+          <div class="result-lbl">Cubic Yards</div>
+          <div class="result-bar" style="background:#ffffff44;"></div>
+          <div class="result-val" id="curb-q-r-yards">—</div>
+        </div>
+        <div class="result-col">
+          <div class="result-lbl">60 lb Bags</div>
+          <div class="result-bar" style="background:var(--accent);"></div>
+          <div class="result-val" id="curb-q-r-bags60">—</div>
+        </div>
+      </div>
+      <div class="result-extras">
+        <div class="result-extra-row" style="margin-bottom:4px;">
+          <div class="result-extra-lbl"><span class="dot" style="background:#5b9bd5;"></span>80 lb Bags</div>
+          <div class="result-extra-val" id="curb-q-r-bags80">—</div>
+        </div>
+        <div class="result-extra-row">
+          <div class="result-extra-lbl"><span class="dot" style="background:var(--green);"></span>Total Cost</div>
+          <div class="result-extra-val" id="curb-q-r-cost">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="btn-group"><button class="abtn abtn-calc" onclick="calcCurbQuick()">Calculate</button></div>
+    <div class="btn-group">
+      <button class="abtn abtn-clear" onclick="clearCurbQuick()">Clear</button>
+      <button class="abtn abtn-share" onclick="shareCalc(_curbQuickBody(),'Curb & Gutter Estimate')">↗ Share</button>
+    </div>
+    <div class="note"><strong>NOTE:</strong> Default dimensions are standard curb & gutter. Adjust if needed.</div>
+  </div>
+
+  <!-- Full dimensions panel -->
+  <div id="curb-dims-panel">
+  <div class="curb-diagram">
+    <svg viewBox="0 0 340 200" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,sans-serif" font-size="11">
+      <polygon points="20,155 200,155 260,120 260,145 80,180" fill="#333" stroke="#555" stroke-width="1"/>
+      <polygon points="20,130 200,130 260,95 80,95" fill="#3e3e3e" stroke="#555" stroke-width="1"/>
+      <polygon points="20,130 20,155 80,180 80,155" fill="#383838" stroke="#555" stroke-width="1"/>
+      <polygon points="80,60 80,130 130,120 130,50" fill="#383838" stroke="#555" stroke-width="1"/>
+      <polygon points="80,60 130,50 260,50 210,60" fill="#4a4a4a" stroke="#555" stroke-width="1"/>
+      <polygon points="130,50 130,120 260,95 260,50" fill="#424242" stroke="#555" stroke-width="1"/>
+      <line x1="270" y1="50" x2="270" y2="95" stroke="#999" stroke-width="1" marker-end="url(#a)" marker-start="url(#a)"/>
+      <text x="275" y="72" fill="#999" font-weight="700">Curb</text>
+      <text x="275" y="85" fill="#999" font-weight="700">Depth</text>
+      <line x1="138" y1="50" x2="138" y2="130" stroke="#999" stroke-width="1" marker-end="url(#a)" marker-start="url(#a)"/>
+      <text x="142" y="82" fill="#999" font-weight="700">Curb</text>
+      <text x="142" y="95" fill="#999" font-weight="700">Height</text>
+      <line x1="20" y1="165" x2="80" y2="165" stroke="#999" stroke-width="1" marker-end="url(#a)" marker-start="url(#a)"/>
+      <text x="22" y="178" fill="#999" font-weight="700">Gutter</text>
+      <line x1="10" y1="130" x2="10" y2="155" stroke="#999" stroke-width="1" marker-end="url(#a)" marker-start="url(#a)"/>
+      <text x="14" y="145" fill="#999" font-size="9" font-weight="700">Flag</text>
+      <line x1="20" y1="188" x2="200" y2="160" stroke="#999" stroke-width="1" marker-end="url(#a)" marker-start="url(#a)"/>
+      <text x="90" y="185" fill="#999" font-weight="700">Length</text>
+      <defs><marker id="a" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#999"/></marker></defs>
+    </svg>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Inputs</div>
+    <div class="irow"><span class="irow-lbl">Curb Depth (in)</span><input type="number" id="curb-depth" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Curb Height (in)</span><input type="number" id="curb-height" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Gutter Width (in)</span><input type="number" id="curb-gutter" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Flag Thickness (in)</span><input type="number" id="curb-flag" placeholder="inches" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Length (ft)</span><input type="number" id="curb-length" placeholder="feet" inputmode="decimal" /></div>
+    <div class="irow"><span class="irow-lbl">Cost per yard <span class="opt">optional</span></span><input type="number" id="curb-cost" placeholder="$" inputmode="decimal" /></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Results</div>
+    <div class="results-row">
+      <div class="result-col">
+        <div class="result-lbl">Cubic Yards</div>
+        <div class="result-bar" style="background:#ffffff44;"></div>
+        <div class="result-val" id="curb-r-yards">—</div>
+      </div>
+      <div class="result-col">
+        <div class="result-lbl">60 lb Bags</div>
+        <div class="result-bar" style="background:var(--accent);"></div>
+        <div class="result-val" id="curb-r-bags60">—</div>
+      </div>
+    </div>
+    <div class="result-extras">
+      <div class="result-extra-row" style="margin-bottom:4px;">
+        <div class="result-extra-lbl"><span class="dot" style="background:#5b9bd5;"></span>80 lb Bags</div>
+        <div class="result-extra-val" id="curb-r-bags80">—</div>
+      </div>
+      <div class="result-extra-row">
+        <div class="result-extra-lbl"><span class="dot" style="background:var(--green);"></span>Total Cost</div>
+        <div class="result-extra-val" id="curb-r-cost">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="abtn abtn-calc" onclick="calcCurb()">Calculate</button>
+  </div>
+  <div class="btn-group">
+    <button class="abtn abtn-clear" onclick="clearCurb()">Clear</button>
+    <button class="abtn abtn-share" onclick="shareCalc(_curbBody(),'Curb & Gutter Estimate')">↗ Share</button>
+  </div>
+
+  <button class="save-job-tab-btn" onclick="openSaveJobFrom('curb')">💾 Save Job</button>
+  <div class="note"><strong>NOTE:</strong> Cross-section = (Depth × Height) + (Gutter × Flag). Add 8% waste.</div>
+  </div><!-- end curb-dims-panel -->
+</div>
+
+<!-- ════════════════════════════════════
+     MEASUREMENTS
+════════════════════════════════════ -->
+<div class="page" id="page-meas">
+
+  <!-- Saved projects button at top -->
+  <!-- Top row: New Job + Saved Jobs -->
+  <div style="display:flex;gap:10px;margin-bottom:12px;">
+    <button class="proj-save-btn-full" onclick="openSaveJob()" style="flex:2;margin-bottom:0;">💾 Save Job</button>
+    <button class="proj-list-btn" onclick="openProjects()" style="flex:1;margin-bottom:0;text-align:center;">📂 Saved</button>
+  </div>
+
+  <div class="meas-section-lbl">Areas / Rooms</div>
+  <div id="meas-rows"></div>
+  <button class="add-area-btn" onclick="measAddRow()">+ Add Area</button>
+
+  <div class="meas-summary">
+    <div class="meas-sum-lbl">Summary</div>
+    <div class="meas-sum-row"><span class="sk">Number of areas</span><span class="sv" id="meas-count">0</span></div>
+    <div class="meas-sum-row"><span class="sk">Total Square Footage</span><span class="sv green" id="meas-total-sf">0 SF</span></div>
+    <div class="meas-sum-row"><span class="sk">+ 10% waste</span><span class="sv amber" id="meas-waste-sf">0 SF</span></div>
+  </div>
+
+  <div class="meas-price-card">
+    <div class="meas-price-lbl">Quick Price Estimate</div>
+    <div class="meas-price-row"><label>$ Price per SF</label><input type="number" id="meas-price" placeholder="0.00" inputmode="decimal" oninput="measUpdateTotals()" /></div>
+    <div class="meas-price-row"><label>$ Extra / Fixed cost</label><input type="number" id="meas-extra" placeholder="0.00" inputmode="decimal" oninput="measUpdateTotals()" /></div>
+    <div class="meas-total-row">
+      <span class="meas-total-lbl">Estimated Total</span>
+      <span class="meas-total-val" id="meas-est-total">—</span>
+    </div>
+  </div>
+
+  <button class="meas-to-calc-btn" onclick="openCalcPicker()">Calculate Material →</button>
+
+  <div class="btn-group">
+    <button class="abtn abtn-clear" onclick="measClear()">Clear</button>
+    <button class="abtn abtn-share" onclick="shareCalc(_measBody(),'Measurements Estimate')">↗ Share</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     JOBS PAGE
+════════════════════════════════════ -->
+<div class="page" id="page-jobs">
+  <div class="jobs-header">
+    <div class="jobs-title">📋 My Jobs</div>
+    <!-- Search bar -->
+    <div class="jobs-search-wrap">
+      <span class="jobs-search-icon">🔍</span>
+      <input class="jobs-search-input" type="text" id="jobs-search" placeholder="Search by address, customer, phone…" oninput="filterJobs(this.value)" />
+      <button class="jobs-search-clear hidden" id="jobs-search-clear" onclick="clearJobSearch()">✕</button>
+    </div>
+    <!-- Stats bar -->
+    <div class="jobs-stats" id="jobs-stats"></div>
+  </div>
+  <div id="jobs-page-list"></div>
+  <div id="jobs-page-empty" style="text-align:center;padding:50px 20px;color:var(--text3);">
+    <div style="font-size:40px;margin-bottom:12px;">📂</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">No saved jobs yet</div>
+    <div style="font-size:13px;">Use the 💾 Save Job button on any calculator to save a job here.</div>
+  </div>
+  <div id="jobs-no-results" style="text-align:center;padding:30px 20px;color:var(--text3);display:none;">
+    <div style="font-size:30px;margin-bottom:8px;">🔍</div>
+    <div style="font-size:15px;font-weight:700;">No results found</div>
+  </div>
+</div>
+
+<!-- ─── JOBS FULL PANEL ─── -->
+<div class="jobs-panel hidden" id="jobs-panel">
+  <div class="jobs-panel-header">
+    <button class="jobs-panel-back" onclick="closeJobsPanel()">← Back</button>
+    <div class="jobs-panel-title">📋 My Jobs</div>
+    <div style="width:60px;"></div>
+  </div>
+  <!-- Search -->
+  <div style="padding:10px 16px 0;">
+    <div class="jobs-search-wrap">
+      <span class="jobs-search-icon">🔍</span>
+      <input class="jobs-search-input" type="text" id="jobs-panel-search" placeholder="Search address, customer, phone…" oninput="filterJobsPanel(this.value)" />
+      <button class="jobs-search-clear hidden" id="jobs-panel-clear" onclick="clearJobsPanelSearch()">✕</button>
+    </div>
+    <div class="jobs-stats" id="jobs-panel-stats"></div>
+  </div>
+  <!-- List -->
+  <div class="jobs-panel-list" id="jobs-panel-list"></div>
+  <div id="jobs-panel-empty" style="text-align:center;padding:60px 20px;color:var(--text3);display:none;">
+    <div style="font-size:48px;margin-bottom:14px;">📂</div>
+    <div style="font-size:17px;font-weight:800;margin-bottom:8px;color:var(--text);">No saved jobs yet</div>
+    <div style="font-size:13px;">Tap 💾 Save Job on any calculator<br>to save your first job here.</div>
+  </div>
+  <div id="jobs-panel-noresults" style="text-align:center;padding:40px 20px;color:var(--text3);display:none;">
+    <div style="font-size:32px;margin-bottom:8px;">🔍</div>
+    <div style="font-size:15px;font-weight:700;">No results found</div>
+  </div>
+</div>
+
+<!-- ─── EDIT JOB SHEET ─── -->
+<div class="picker-overlay hidden" id="edit-job-overlay" onclick="closeEditJob()">
+  <div class="picker-sheet" onclick="event.stopPropagation()" style="max-height:92vh;overflow-y:auto;">
+    <div class="picker-handle"></div>
+    <div class="picker-title">✏️ Edit Job</div>
+    <input type="hidden" id="ej-id" />
+    <div class="save-job-field">
+      <div class="save-job-label">📍 Job Address</div>
+      <input class="save-job-input" type="text" id="ej-address" placeholder="123 Main St" />
+    </div>
+    <div class="save-job-field">
+      <div class="save-job-label">👤 Customer Name</div>
+      <input class="save-job-input" type="text" id="ej-customer" placeholder="John Smith" />
+    </div>
+    <div class="save-job-field">
+      <div class="save-job-label">📞 Phone</div>
+      <input class="save-job-input" type="tel" id="ej-phone" placeholder="(917) 000-0000" inputmode="tel" />
+    </div>
+    <div class="save-job-field">
+      <div class="save-job-label">📞 Phone Number 2 <span style="font-weight:400;color:var(--text3);font-size:11px;">(optional)</span></div>
+      <input class="save-job-input" type="tel" id="ej-phone2" placeholder="(917) 000-0000" inputmode="tel" />
+    </div>
+    <div class="save-job-field">
+      <div class="save-job-label">📝 Notes</div>
+      <textarea class="save-job-input save-job-textarea" id="ej-notes" placeholder="Notes…"></textarea>
+    </div>
+    <!-- Calculations list with delete per calc -->
+    <div class="save-job-field">
+      <div class="save-job-label">📊 Calculations</div>
+      <div id="ej-calcs-list"></div>
+    </div>
+    <button class="proj-save-btn-full" id="ej-save-btn" onclick="confirmEditJob()">✅ Save Changes</button>
+    <button class="picker-cancel" onclick="closeEditJob()">Cancel</button>
+  </div>
+</div>
+
+<!-- ─── SAVE JOB SHEET ─── -->
+<div class="picker-overlay hidden" id="save-job-overlay" onclick="closeSaveJob()">
+  <div class="picker-sheet" onclick="event.stopPropagation()" style="max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">
+
+    <!-- Sticky top — never scrolls away -->
+    <div style="flex-shrink:0;">
+      <div class="picker-handle"></div>
+      <div class="picker-title">💾 Save Job</div>
+      <!-- New / Add to Existing toggle -->
+      <div class="sj-mode-row">
+      <button class="sj-mode-btn active" id="sj-new-btn" onclick="setSJMode('new')">➕ New Job</button>
+      <button class="sj-mode-btn" id="sj-existing-btn" onclick="setSJMode('existing')">📂 Add to Existing</button>
+    </div>
+    </div><!-- end sticky top -->
+
+    <!-- SCROLLABLE BODY -->
+    <div style="flex:1;overflow-y:auto;padding:0 20px 20px;">
+
+    <!-- NEW JOB fields -->
+    <div id="sj-new-fields">
+      <div class="save-job-field">
+        <div class="save-job-label">📍 Job Address</div>
+        <div style="position:relative;">
+          <input class="save-job-input" type="text" id="sj-address" placeholder="Start typing address…" autocomplete="off" oninput="searchAddress(this.value)" />
+          <div class="addr-suggestions hidden" id="addr-suggestions"></div>
+        </div>
+      </div>
+      <div class="save-job-field">
+        <div class="save-job-label">👤 Customer Name</div>
+        <input class="save-job-input" type="text" id="sj-customer" placeholder="John Smith" autocomplete="name" />
+      </div>
+      <div class="save-job-field">
+        <div class="save-job-label">📞 Phone Number</div>
+        <input class="save-job-input" type="tel" id="sj-phone" placeholder="(917) 000-0000" autocomplete="tel" inputmode="tel" />
+      </div>
+      <div class="save-job-field">
+        <div class="save-job-label">📞 Phone Number 2 <span style="font-weight:400;color:var(--text3);font-size:11px;">(optional)</span></div>
+        <input class="save-job-input" type="tel" id="sj-phone2" placeholder="(917) 000-0000" inputmode="tel" />
+      </div>
+      <div class="save-job-field">
+        <div class="save-job-label">📝 Notes</div>
+        <textarea class="save-job-input save-job-textarea" id="sj-notes" placeholder="Job details, material specs, access notes..."></textarea>
+      </div>
+    </div>
+
+    <!-- ADD TO EXISTING fields -->
+    <div id="sj-existing-fields" class="hidden">
+      <div class="save-job-field">
+        <div class="save-job-label">Select a saved job to add to</div>
+        <div class="jobs-search-wrap" style="margin-bottom:10px;">
+          <span class="jobs-search-icon">🔍</span>
+          <input class="jobs-search-input" type="text" id="sj-existing-search" placeholder="Search jobs…" oninput="filterExistingList(this.value)" />
+        </div>
+        <div id="sj-existing-list">
+          <div style="text-align:center;padding:16px;color:var(--text3);">Loading jobs…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculation summary -->
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">📊 Calculation to Save</div>
+    <div class="save-job-summary" id="sj-summary" style="white-space:pre-line;line-height:1.8;"></div>
+
+    <button class="proj-save-btn-full" id="sj-save-btn" onclick="confirmSaveJob()" style="margin-top:16px;">💾 Save Job</button>
+    <button class="picker-cancel" onclick="closeSaveJob()">Cancel</button>
+
+    </div><!-- end scrollable body -->
+  </div>
+</div>
+
+<!-- ─── PROJECTS SHEET ─── -->
+<div class="picker-overlay hidden" id="projects-overlay" onclick="closeProjects()">
+  <div class="picker-sheet" onclick="event.stopPropagation()" style="max-height:80vh;overflow-y:auto;">
+    <div class="picker-handle"></div>
+    <div class="picker-title">📂 Saved Projects</div>
+    <div class="picker-sub">Tap to load · Swipe to delete</div>
+    <div id="projects-list" style="margin-top:4px;"></div>
+    <div id="projects-empty" style="text-align:center;padding:30px;color:var(--text3);font-size:14px;display:none;">No saved projects yet.<br>Fill in measurements and tap 💾 Save.</div>
+    <button class="picker-cancel" onclick="closeProjects()">Close</button>
+  </div>
+</div>
+
+<!-- ─── PICKER SHEET ─── -->
+<div id="calc-picker-overlay" class="picker-overlay hidden" onclick="closeCalcPicker()">
+  <div class="picker-sheet" onclick="event.stopPropagation()">
+    <div class="picker-handle"></div>
+    <div class="picker-title">Send <span id="picker-sf-label">0 SF</span> to…</div>
+    <div class="picker-sub">Choose a calculator to pre-fill</div>
+    <div class="picker-item" onclick="sendToCalc('asphalt')"><div class="picker-item-icon">🛣</div><div class="picker-item-body"><div class="picker-item-name">Asphalt Calculator</div><div class="picker-item-sub">Pre-fills area</div></div><div class="picker-arr">›</div></div>
+    <div class="picker-item" onclick="sendToCalc('concrete-slab')"><div class="picker-item-icon">⬜</div><div class="picker-item-body"><div class="picker-item-name">Concrete Slab</div><div class="picker-item-sub">Pre-fills slab area</div></div><div class="picker-arr">›</div></div>
+    <div class="picker-item" onclick="sendToCalc('sand')"><div class="picker-item-icon">🪨</div><div class="picker-item-body"><div class="picker-item-name">Sand &amp; Gravel</div><div class="picker-item-sub">Pre-fills coverage area</div></div><div class="picker-arr">›</div></div>
+    <button class="picker-cancel" onclick="closeCalcPicker()">Cancel</button>
+  </div>
+</div>
+
+
+
+<script>
+  // ── JOBS PANEL ──
+  let _panelJobs = [];
+
+  async function openJobsPanel() {
+    document.getElementById('jobs-panel').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    await loadJobsPanelData();
+  }
+
+  function closeJobsPanel() {
+    document.getElementById('jobs-panel').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  async function loadJobsPanelData() {
+    const list  = document.getElementById('jobs-panel-list');
+    const empty = document.getElementById('jobs-panel-empty');
+    const noRes = document.getElementById('jobs-panel-noresults');
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">Loading…</div>';
+    empty.style.display = 'none';
+    noRes.style.display = 'none';
+    document.getElementById('jobs-panel-search').value = '';
+    document.getElementById('jobs-panel-clear').classList.add('hidden');
+    try {
+      _panelJobs = await window._loadProjects();
+      _allJobs   = _panelJobs; // keep in sync
+      renderJobsPanel(_panelJobs);
+    } catch(e) {
+      list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);">Error loading. Please try again.</div>';
+    }
+  }
+
+  function renderJobsPanel(jobs) {
+    const list  = document.getElementById('jobs-panel-list');
+    const empty = document.getElementById('jobs-panel-empty');
+    const noRes = document.getElementById('jobs-panel-noresults');
+    list.innerHTML = ''; empty.style.display='none'; noRes.style.display='none';
+    if (!_panelJobs.length) { empty.style.display='block'; return; }
+    if (!jobs.length)       { noRes.style.display='block'; return; }
+    jobs.forEach(job => renderJobCard(job, list));
+    const totalSF = jobs.reduce((s,j)=>s+(j.totalSF||0),0);
+    document.getElementById('jobs-panel-stats').innerHTML =
+      `<div class="jobs-stat-chip"><span>${jobs.length}</span> jobs</div>` +
+      `<div class="jobs-stat-chip"><span>${totalSF.toLocaleString('en-US',{maximumFractionDigits:0})}</span> total SF</div>`;
+  }
+
+  function filterJobsPanel(q) {
+    const query = q.trim().toLowerCase();
+    document.getElementById('jobs-panel-clear').classList.toggle('hidden', !query);
+    if (!query) { renderJobsPanel(_panelJobs); return; }
+    renderJobsPanel(_panelJobs.filter(j =>
+      (j.address||j.name||'').toLowerCase().includes(query) ||
+      (j.customer||'').toLowerCase().includes(query) ||
+      (j.phone||'').toLowerCase().includes(query) ||
+      (j.notes||'').toLowerCase().includes(query)
+    ));
+  }
+
+  function clearJobsPanelSearch() {
+    document.getElementById('jobs-panel-search').value = '';
+    document.getElementById('jobs-panel-clear').classList.add('hidden');
+    renderJobsPanel(_panelJobs);
+  }
+
+  // ── User menu ──
+  function showUserMenu() { document.getElementById('user-menu').classList.remove('hidden'); }
+  function hideUserMenu() { document.getElementById('user-menu').classList.add('hidden'); }
+
+  // ── Settings ──
+  function showSettings() { document.getElementById('settings-menu').classList.remove('hidden'); loadSignatureSettings(); }
+  function hideSettings() { document.getElementById('settings-menu').classList.add('hidden'); }
+
+  function loadSignatureSettings() {
+    const sigOn  = localStorage.getItem('sig-on') === 'true';
+    const sigTxt = localStorage.getItem('sig-text') || '';
+    document.getElementById('sig-toggle').classList.toggle('on', sigOn);
+    document.getElementById('sig-text').value = sigTxt;
+  }
+
+  function toggleSignature() {
+    const el = document.getElementById('sig-toggle');
+    const isOn = el.classList.toggle('on');
+    localStorage.setItem('sig-on', isOn);
+  }
+
+  function saveSignature() {
+    localStorage.setItem('sig-text', document.getElementById('sig-text').value);
+  }
+
+  function getSignature() {
+    const sigOn  = localStorage.getItem('sig-on') === 'true';
+    const sigTxt = localStorage.getItem('sig-text') || '';
+    if (sigOn && sigTxt.trim()) return '\n\n' + sigTxt.trim();
+    return '';
+  }
+
+  // ── Share calculation ──
+  async function shareCalc(body, title) {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: title || 'Maman Calculators', text: body });
+        return;
+      } catch(e) { if (e.name === 'AbortError') return; }
+    }
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(body);
+      showToast('Copied to clipboard! 📋');
+    } catch(e) {
+      // Last fallback: email
+      window.location.href = 'mailto:?subject=' + encodeURIComponent(title||'Estimate') + '&body=' + encodeURIComponent(body);
+    }
+  }
+
+  function shareJob(id) {
+    const job = (_allJobs.find(j=>j.id===id)) || (_panelJobs.find(j=>j.id===id));
+    if (!job) return;
+    shareCalc(buildJobEmailBody(job), 'Job: ' + (job.address||job.name));
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('share-toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  // ── Share app ──
+  function shareApp() {
+    const url = 'https://maman-calculators.vercel.app';
+    const title = 'Maman Calculators';
+    const text = 'Professional construction material calculators — Asphalt, Concrete, Sand & Gravel, Curb & Gutter, and Measurements.';
+    if (navigator.share) {
+      navigator.share({ title, text, url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        const toast = document.getElementById('share-toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      });
+    }
+  }
+
+  // ── Theme ──
+  function toggleTheme() {
+    const isDay = document.body.classList.toggle('day');
+    document.getElementById('theme-btn').textContent = isDay ? '☀️' : '🌙';
+    localStorage.setItem('maman-theme', isDay ? 'day' : 'night');
+  }
+  (function() {
+    const saved = localStorage.getItem('maman-theme');
+    if (saved === 'day') {
+      document.body.classList.add('day');
+      document.getElementById('theme-btn').textContent = '☀️';
+    }
+  })();
+
+  // ── Tab switching ──
+  const tabOrder = ['asphalt','concrete','sand','curb','meas'];
+  function switchTab(name, el) {
+    document.querySelectorAll('.pill-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.getElementById('page-' + name).classList.add('active');
+    // sync bottom nav
+    const idx = tabOrder.indexOf(name);
+    document.querySelectorAll('.bnav-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+    if (name === 'jobs') loadJobsPage();
+    window.scrollTo(0, 0);
+  }
+
+
+
+  // ── Helpers ──
+  function n(id) { return parseFloat(document.getElementById(id).value) || 0; }
+  function fmt(v, d=2) { return v.toFixed(d); }
+  function fmtMoney(v) { return '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function set(id, val) { document.getElementById(id).value = val; }
+  function setText(id, val) { document.getElementById(id).textContent = val; }
+  function clr(id) { const el=document.getElementById(id); if(el) el.value=''; }
+  function fmtSF(v) { return v.toLocaleString('en-US',{maximumFractionDigits:1})+' SF'; }
+
+  // ── MODE TOGGLES ──
+  let _aspMode = 'dims', _sndMode = 'dims', _conMode = 'dims', _conColMode = 'dims', _conCircMode = 'dims', _conStairMode = 'dims';
+
+  function aspMode(mode, el) {
+    _aspMode = mode;
+    document.querySelectorAll('#page-asphalt .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('asp-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('asp-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('asp-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+  function sndMode(mode, el) {
+    _sndMode = mode;
+    document.querySelectorAll('#page-sand .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('snd-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('snd-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('snd-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+  // ── Concrete menu level Quick SF ──
+  function conMenuMode(mode, el) {
+    document.querySelectorAll('#con-menu-screen .sf-toggle-row .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('con-menu-sf-panel').classList.toggle('hidden', mode==='dims');
+    document.getElementById('con-menu-items').classList.toggle('hidden', mode==='sf');
+    clearConQuickSF();
+  }
+
+  function calcConQuickSF() {
+    const sf  = n('con-menu-quick-sf');
+    const D   = n('con-menu-sf-depth');
+    if (!sf || !D) return alert('Please enter Square Footage and Thickness.');
+    const volFt    = sf * (D / 12);
+    const volWaste = volFt * 1.08;
+    const yards    = volWaste / 27;
+    const yardsUp  = Math.ceil(yards * 4) / 4;
+    const bags     = Math.ceil(volWaste / 0.45);
+    const psi      = document.getElementById('con-menu-sf-mix').value;
+    const cpy      = n('con-menu-sf-cost');
+    setText('con-menu-headline', fmt(yardsUp) + ' cubic yards.');
+    const adEl = document.getElementById('con-menu-advisory');
+    const bgEl = document.getElementById('con-menu-bags-msg');
+    if (yards < 5) {
+      adEl.textContent = 'We have a minimum order of five cubic yards on each load. If you need less, it may cost more. Consider combining with another small project.';
+      bgEl.textContent = 'Alternative: purchase approximately ' + bags + ' bags (80 lb each).';
+      bgEl.classList.add('show');
+    } else {
+      const trucks = Math.ceil(yards / 10);
+      adEl.textContent = 'You will need approximately ' + fmt(yardsUp) + ' cubic yards — ' + trucks + ' truck load' + (trucks > 1 ? 's' : '') + ' (10 yd³ each).';
+      bgEl.classList.remove('show');
+    }
+    setText('con-menu-cuft',  fmt(volFt) + ' cu ft');
+    setText('con-menu-waste', fmt(volWaste) + ' cu ft');
+    setText('con-menu-psi',   psi + ' PSI');
+    const crow = document.getElementById('con-menu-cost-row');
+    if (cpy) { setText('con-menu-cost-val', fmtMoney(yards * cpy)); crow.style.display = ''; }
+    else { crow.style.display = 'none'; }
+    document.getElementById('con-menu-output').classList.add('show');
+  }
+
+  function clearConQuickSF() {
+    ['con-menu-quick-sf','con-menu-sf-depth','con-menu-sf-cost'].forEach(clr);
+    document.getElementById('con-menu-output').classList.remove('show');
+  }
+
+  function _conQuickBody() {
+    const hl = document.getElementById('con-menu-headline').textContent;
+    const ad = document.getElementById('con-menu-advisory').textContent;
+    const sf = n('con-menu-quick-sf'), D = n('con-menu-sf-depth');
+    return '📐 CONCRETE ESTIMATE\n══════════════════════\n\n✅ TOTAL SF: '+sf.toLocaleString('en-US',{maximumFractionDigits:0})+' ft²\nThickness: '+D+' in\n\n══════════════════════\n'+hl+'\n'+ad+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailConQuickSF() { window.location.href = 'mailto:?subject=Concrete%20Estimate&body=' + encodeURIComponent(_conQuickBody()); }
+  function textConQuickSF()  { window.location.href = 'sms:?body=' + encodeURIComponent(_conQuickBody()); }
+
+  function conMode(mode, el) {
+    _conMode = mode;
+    document.querySelectorAll('#con-sf-toggle .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('con-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('con-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('con-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+  function conColMode(mode, el) {
+    _conColMode = mode;
+    document.querySelectorAll('#con-sub-col .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('con-col-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('con-col-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('con-col-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+  function conCircMode(mode, el) {
+    _conCircMode = mode;
+    document.querySelectorAll('#con-sub-circ .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('con-circ-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('con-circ-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('con-circ-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+  function conStairMode(mode, el) {
+    _conStairMode = mode;
+    document.querySelectorAll('#con-sub-stairs .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('con-stair-dims-card').classList.toggle('hidden', mode==='sf');
+    document.getElementById('con-stair-sf-row').classList.toggle('hidden', mode==='dims');
+    document.getElementById('con-stair-sf-extra').classList.toggle('hidden', mode==='dims');
+  }
+
+  // ── ASPHALT ──
+  function calcAsphalt() {
+    let sf, D;
+    if (_aspMode === 'sf') {
+      sf = n('asp-quick-sf');
+      D  = n('asp-sf-depth');
+      if (!sf || !D) return alert('Please enter Square Footage and Thickness.');
+    } else {
+      const W=n('asp-width'), L=n('asp-length');
+      D = n('asp-depth');
+      if(!W||!L||!D) return alert('Please fill in Width, Length, and Thickness.');
+      sf = W * L;
+    }
+    const cpt = _aspMode==='sf' ? n('asp-sf-cost') : n('asp-cost');
+    const volFt=sf*(D/12), volYd=volFt/27, tons=(volFt*145)/2000;
+    setText('asp-r-yards', fmt(volYd));
+    setText('asp-r-tons',  fmt(tons));
+    setText('asp-r-cost',  cpt ? fmtMoney(tons*cpt) : '—');
+  }
+  function clearAsphalt() {
+    ['asp-width','asp-length','asp-depth','asp-cost','asp-quick-sf','asp-sf-depth','asp-sf-cost'].forEach(clr);
+    ['asp-r-yards','asp-r-tons','asp-r-cost'].forEach(id=>setText(id,'—'));
+  }
+  function _aspBody() {
+    let inputs = '';
+    if(_aspMode==='sf'){
+      inputs = 'Total SF: '+n('asp-quick-sf')+' ft²\nThickness: '+n('asp-sf-depth')+' in\n';
+    } else {
+      inputs = 'Width: '+n('asp-width')+' ft\nLength: '+n('asp-length')+' ft\nThickness: '+n('asp-depth')+' in\nTotal SF: '+(n('asp-width')*n('asp-length'))+' ft²\n';
+    }
+    return '📐 ASPHALT ESTIMATE\n══════════════════════\n\n'+inputs+'\n══════════════════════\nCubic Yards: '+document.getElementById('asp-r-yards').textContent+'\nHot Mix Tons: '+document.getElementById('asp-r-tons').textContent+'\nTotal Cost: '+document.getElementById('asp-r-cost').textContent+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailAsphalt() { window.location.href='mailto:?subject=Asphalt%20Estimate&body='+encodeURIComponent(_aspBody()); }
+  function textAsphalt()  { window.location.href='sms:?body='+encodeURIComponent(_aspBody()); }
+
+  // ── CONCRETE ──
+  let conSubType='slab';
+  const conSubTitles={slab:'Concrete Slab',wall:'Concrete Wall',footing:'Concrete Footing',column:'Concrete Column',circle:'Circle Slab',stairs:'Concrete Stairs'};
+
+  function openConSub(type) {
+    conSubType=type;
+    ['con-sub-lwt','con-sub-col','con-sub-circ','con-sub-stairs'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    if(type==='slab'){
+      document.getElementById('con-lwt-d1-lbl').textContent='Length (ft)';
+      document.getElementById('con-lwt-d2-lbl').textContent='Width (ft)';
+      document.getElementById('con-lwt-d3-lbl').textContent='Thickness (in)';
+      document.getElementById('con-sub-lwt').classList.remove('hidden');
+    } else if(type==='wall'){
+      document.getElementById('con-lwt-d1-lbl').textContent='Length (ft)';
+      document.getElementById('con-lwt-d2-lbl').textContent='Height (ft)';
+      document.getElementById('con-lwt-d3-lbl').textContent='Thickness (in)';
+      document.getElementById('con-sub-lwt').classList.remove('hidden');
+    } else if(type==='footing'){
+      document.getElementById('con-lwt-d1-lbl').textContent='Length (ft)';
+      document.getElementById('con-lwt-d2-lbl').textContent='Width (ft)';
+      document.getElementById('con-lwt-d3-lbl').textContent='Depth (in)';
+      document.getElementById('con-sub-lwt').classList.remove('hidden');
+    } else if(type==='column'){
+      document.getElementById('con-sub-col').classList.remove('hidden');
+    } else if(type==='circle'){
+      document.getElementById('con-sub-circ').classList.remove('hidden');
+    } else if(type==='stairs'){
+      document.getElementById('con-sub-stairs').classList.remove('hidden');
+    }
+    document.getElementById('con-sub-title').textContent=conSubTitles[type];
+    // show/hide Quick SF toggle only for area-based types
+    const hasSF=['slab','wall','footing'].includes(type);
+    document.getElementById('con-sf-toggle').classList.toggle('hidden', !hasSF);
+    // reset all modes to dims
+    _conMode='dims'; _conColMode='dims'; _conCircMode='dims'; _conStairMode='dims';
+    if(hasSF){
+      document.getElementById('con-dims-card').classList.remove('hidden');
+      document.getElementById('con-sf-row').classList.add('hidden');
+      document.getElementById('con-sf-extra').classList.add('hidden');
+      document.querySelectorAll('#con-sf-toggle .sf-toggle-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+    }
+    clearConcrete2();
+    document.getElementById('con-menu-screen').classList.add('hidden');
+    document.getElementById('con-sub-screen').classList.remove('hidden');
+    window.scrollTo(0,0);
+  }
+  function closeConSub(){
+    document.getElementById('con-sub-screen').classList.add('hidden');
+    document.getElementById('con-menu-screen').classList.remove('hidden');
+    window.scrollTo(0,0);
+  }
+  function calcConcrete2(){
+    let volFt=0;
+    if(['slab','wall','footing'].includes(conSubType)){
+      if (_conMode === 'sf') {
+        const sf=n('con-quick-sf'), T=n('con-sf-depth');
+        if(!sf||!T) return alert('Please enter Square Footage and Thickness.');
+        volFt=sf*(T/12);
+      } else {
+        const L=n('con-lwt-length'),H=n('con-lwt-height'),T=n('con-lwt-thickness');
+        if(!L||!H||!T) return alert('Please fill in all fields.');
+        volFt=L*H*(T/12);
+      }
+    } else if(conSubType==='column'){
+      if(_conColMode==='sf'){
+        const sf=n('con-col-quick-sf'),h=n('con-col-sf-h');
+        if(!sf||!h) return alert('Please enter SF and Height.');
+        volFt=sf*h;
+      } else {
+        const dia=n('con-col2-dia'),h=n('con-col2-h');
+        if(!dia||!h) return alert('Please fill in all fields.');
+        volFt=Math.PI*Math.pow(dia/2,2)*h;
+      }
+    } else if(conSubType==='circle'){
+      if(_conCircMode==='sf'){
+        const sf=n('con-circ-quick-sf'),T=n('con-circ-sf-depth');
+        if(!sf||!T) return alert('Please enter SF and Thickness.');
+        volFt=sf*(T/12);
+      } else {
+        const dia=n('con-circ2-dia'),T=n('con-circ2-depth');
+        if(!dia||!T) return alert('Please fill in all fields.');
+        volFt=Math.PI*Math.pow(dia/2,2)*(T/12);
+      }
+    } else if(conSubType==='stairs'){
+      if(_conStairMode==='sf'){
+        const sf=n('con-stair-quick-sf'),T=n('con-stair-sf-depth');
+        if(!sf||!T) return alert('Please enter SF and Avg. Depth.');
+        volFt=sf*(T/12);
+      } else {
+        const rise=n('con-st-rise')/12,run=n('con-st-run')/12,w=n('con-st-width'),s=n('con-st-steps');
+        if(!rise||!run||!w||!s) return alert('Please fill in all fields.');
+        volFt=0.5*rise*run*w*s;
+      }
+    }
+    const volWaste=volFt*1.08, yards=volWaste/27, yardsUp=Math.ceil(yards*4)/4;
+    const bags=Math.ceil(volWaste/0.45), psi=document.getElementById('con2-mix').value, cpy=n('con2-cost');
+    setText('con2-headline', fmt(yardsUp)+' cubic yards.');
+    const adEl=document.getElementById('con2-advisory'), bgEl=document.getElementById('con2-bags-msg');
+    if(yards<5){
+      adEl.textContent='We have a minimum order of five cubic yards on each load. If you need less, it may cost more. Consider combining with another small project.';
+      bgEl.textContent='Alternative: purchase approximately '+bags+' bags (80 lb each).';
+      bgEl.classList.add('show');
+    } else {
+      const trucks=Math.ceil(yards/10);
+      adEl.textContent='You will need approximately '+fmt(yardsUp)+' cubic yards — '+trucks+' truck load'+(trucks>1?'s':'')+' (10 yd³ each).';
+      bgEl.classList.remove('show');
+    }
+    setText('con2-r-cuft', fmt(volFt)+' cu ft');
+    setText('con2-r-waste', fmt(volWaste)+' cu ft');
+    setText('con2-r-psi', psi+' PSI');
+    const crow=document.getElementById('con2-cost-row');
+    if(cpy){setText('con2-r-cost',fmtMoney(yards*cpy));crow.style.display='';}
+    else crow.style.display='none';
+    document.getElementById('con2-output').classList.add('show');
+  }
+  function clearConcrete2(){
+    ['con-lwt-length','con-lwt-height','con-lwt-thickness',
+     'con-col2-dia','con-col2-h',
+     'con-circ2-dia','con-circ2-depth',
+     'con-st-rise','con-st-run','con-st-width','con-st-steps',
+     'con2-cost','con-quick-sf','con-sf-depth',
+     'con-col-quick-sf','con-col-sf-h',
+     'con-circ-quick-sf','con-circ-sf-depth',
+     'con-stair-quick-sf','con-stair-sf-depth'].forEach(clr);
+    document.getElementById('con2-output').classList.remove('show');
+  }
+  function _conBody(){
+    const hl=document.getElementById('con2-headline').textContent;
+    const ad=document.getElementById('con2-advisory').textContent;
+    let inputs='';
+    if(['slab','wall','footing'].includes(conSubType)){
+      if(_conMode==='sf') inputs='Total SF: '+n('con-quick-sf')+' ft²\nThickness: '+n('con-sf-depth')+' in\n';
+      else inputs='Length: '+n('con-lwt-length')+' ft\nWidth/Height: '+n('con-lwt-height')+' ft\nThickness: '+n('con-lwt-thickness')+' in\nTotal SF: '+(n('con-lwt-length')*n('con-lwt-height'))+' ft²\n';
+    } else if(conSubType==='column'){
+      if(_conColMode==='sf') inputs='Footprint SF: '+n('con-col-quick-sf')+' ft²\nHeight: '+n('con-col-sf-h')+' ft\n';
+      else inputs='Diameter: '+n('con-col2-dia')+' ft\nHeight: '+n('con-col2-h')+' ft\n';
+    } else if(conSubType==='circle'){
+      if(_conCircMode==='sf') inputs='Total SF: '+n('con-circ-quick-sf')+' ft²\nThickness: '+n('con-circ-sf-depth')+' in\n';
+      else inputs='Diameter: '+n('con-circ2-dia')+' ft\nThickness: '+n('con-circ2-depth')+' in\n';
+    } else if(conSubType==='stairs'){
+      if(_conStairMode==='sf') inputs='Total SF: '+n('con-stair-quick-sf')+' ft²\nAvg Depth: '+n('con-stair-sf-depth')+' in\n';
+      else inputs='Rise: '+n('con-st-rise')+' in\nRun: '+n('con-st-run')+' in\nWidth: '+n('con-st-width')+' ft\nSteps: '+n('con-st-steps')+'\n';
+    }
+        // extract SF from inputs string for prominent display
+    const conSFMatch = inputs.match(/(\d[\d,]*(?:\.\d+)?)\s*ft²/);
+    const conSFline  = conSFMatch ? '\n✅ TOTAL SF: '+parseFloat(conSFMatch[1].replace(/,/g,'')).toLocaleString('en-US',{maximumFractionDigits:0})+' ft²' : '';
+    return '📐 '+conSubTitles[conSubType].toUpperCase()+' ESTIMATE\n══════════════════════\n\n'+inputs+conSFline+'\n\n══════════════════════\n'+hl+'\n'+ad+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailConcrete2(){ window.location.href='mailto:?subject='+encodeURIComponent(conSubTitles[conSubType]+' Estimate')+'&body='+encodeURIComponent(_conBody()); }
+  function textConcrete2() { window.location.href='sms:?body='+encodeURIComponent(_conBody()); }
+
+  // ── SAND & GRAVEL ──
+  function toggleSndOther(){ document.getElementById('snd-other-field').classList.toggle('hidden', document.getElementById('snd-material').value!=='0'); }
+  function calcSand(){
+    let sf, D, density, cpt;
+    if (_sndMode === 'sf') {
+      sf      = n('snd-quick-sf');
+      D       = n('snd-sf-depth');
+      density = parseFloat(document.getElementById('snd-sf-material').value);
+      cpt     = n('snd-sf-cost');
+      if(!sf||!D) return alert('Please enter Square Footage and Thickness.');
+    } else {
+      const W=n('snd-width'),L=n('snd-length');
+      D=n('snd-depth');
+      if(!W||!L||!D) return alert('Please fill in all fields.');
+      sf=W*L;
+      density=parseFloat(document.getElementById('snd-material').value);
+      if(density===0){density=n('snd-custom-density');if(!density) return alert('Enter a density.');}
+      cpt=n('snd-cost');
+    }
+    const volFt=sf*(D/12), tons=(volFt*density)/2000, yards=volFt/27;
+    setText('snd-r-tons', fmt(tons));
+    setText('snd-r-yards', fmt(yards));
+    setText('snd-r-cost', cpt?fmtMoney(tons*cpt):'—');
+  }
+  function clearSand(){
+    ['snd-width','snd-length','snd-depth','snd-cost','snd-custom-density','snd-quick-sf','snd-sf-depth','snd-sf-cost'].forEach(clr);
+    ['snd-r-tons','snd-r-yards','snd-r-cost'].forEach(id=>setText(id,'—'));
+  }
+  function _sndBody(){
+    let inputs='';
+    if(_sndMode==='sf'){
+      const mat=document.getElementById('snd-sf-material').options[document.getElementById('snd-sf-material').selectedIndex].text;
+      inputs='Total SF: '+n('snd-quick-sf')+' ft²\nThickness: '+n('snd-sf-depth')+' in\nMaterial: '+mat+'\n';
+    } else {
+      const mat=document.getElementById('snd-material').options[document.getElementById('snd-material').selectedIndex].text;
+      inputs='Width: '+n('snd-width')+' ft\nLength: '+n('snd-length')+' ft\nDepth: '+n('snd-depth')+' in\nTotal SF: '+(n('snd-width')*n('snd-length'))+' ft²\nMaterial: '+mat+'\n';
+    }
+        const sndSF = _sndMode==='sf' ? n('snd-quick-sf') : n('snd-width')*n('snd-length');
+    return '📐 SAND & GRAVEL ESTIMATE\n══════════════════════\n\n'+inputs+'\n══════════════════════\nTons: '+document.getElementById('snd-r-tons').textContent+'\nCubic Yards: '+document.getElementById('snd-r-yards').textContent+'\nTotal Cost: '+document.getElementById('snd-r-cost').textContent+'\n\n✅ TOTAL SF: '+sndSF.toLocaleString('en-US',{maximumFractionDigits:0})+' ft²'+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailSand(){ window.location.href='mailto:?subject=Sand%20%26%20Gravel%20Estimate&body='+encodeURIComponent(_sndBody()); }
+  function textSand() { window.location.href='sms:?body='+encodeURIComponent(_sndBody()); }
+
+  // ── CURB MODE TOGGLE ──
+  let _curbMode = 'dims';
+  function curbMode(mode, el) {
+    _curbMode = mode;
+    document.querySelectorAll('#page-curb .sf-toggle-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('curb-sf-panel').classList.toggle('hidden', mode==='dims');
+    document.getElementById('curb-dims-panel').classList.toggle('hidden', mode==='sf');
+    clearCurbQuick();
+  }
+  function calcCurbQuick() {
+    const len = n('curb-quick-lf');
+    const cd  = n('curb-q-depth') || 6;
+    const ch  = n('curb-q-height') || 8;
+    const gw  = n('curb-q-gutter') || 18;
+    const ft  = n('curb-q-flag') || 6;
+    const cpy = n('curb-q-cost');
+    if (!len) return alert('Please enter Linear Feet.');
+    const xsecFt2 = ((cd*ch) + (gw*ft)) / 144;
+    const volFt3  = xsecFt2 * len;
+    const volWaste= volFt3 * 1.08;
+    const yards   = volWaste / 27;
+    setText('curb-q-r-yards',  fmt(yards));
+    setText('curb-q-r-bags60', Math.ceil(volWaste/0.375));
+    setText('curb-q-r-bags80', Math.ceil(volWaste/0.45));
+    setText('curb-q-r-cost',   cpy ? fmtMoney(yards*cpy) : '—');
+  }
+  function clearCurbQuick() {
+    ['curb-quick-lf','curb-q-cost'].forEach(clr);
+    ['curb-q-r-yards','curb-q-r-bags60','curb-q-r-bags80','curb-q-r-cost'].forEach(id=>setText(id,'—'));
+  }
+  function _curbQuickBody() {
+    const curbLF=n('curb-quick-lf'); return '📐 CURB & GUTTER ESTIMATE\n══════════════════════\n\nLinear Feet: '+curbLF+' ft\nDepth: '+n('curb-q-depth')+' in\nHeight: '+n('curb-q-height')+' in\nGutter: '+n('curb-q-gutter')+' in\nFlag: '+n('curb-q-flag')+' in\n\n══════════════════════\nCubic Yards: '+document.getElementById('curb-q-r-yards').textContent+'\n60lb bags: '+document.getElementById('curb-q-r-bags60').textContent+'\n80lb bags: '+document.getElementById('curb-q-r-bags80').textContent+'\nTotal Cost: '+document.getElementById('curb-q-r-cost').textContent+'\n\n✅ TOTAL LINEAR FT: '+curbLF+' ft'+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailCurbQuick() { window.location.href='mailto:?subject=Curb%20%26%20Gutter%20Estimate&body='+encodeURIComponent(_curbQuickBody()); }
+  function textCurbQuick()  { window.location.href='sms:?body='+encodeURIComponent(_curbQuickBody()); }
+
+  // ── CURB & GUTTER ──
+  function calcCurb(){
+    const cd=n('curb-depth'),ch=n('curb-height'),gw=n('curb-gutter'),ft=n('curb-flag'),len=n('curb-length');
+    if(!cd||!ch||!gw||!ft||!len) return alert('Please fill in all dimensions.');
+    const xsecFt2=((cd*ch)+(gw*ft))/144, volFt3=xsecFt2*len, volWaste=volFt3*1.08, yards=volWaste/27, cpy=n('curb-cost');
+    setText('curb-r-yards', fmt(yards));
+    setText('curb-r-bags60', Math.ceil(volWaste/0.375));
+    setText('curb-r-bags80', Math.ceil(volWaste/0.45));
+    setText('curb-r-cost', cpy?fmtMoney(yards*cpy):'—');
+  }
+  function clearCurb(){
+    ['curb-depth','curb-height','curb-gutter','curb-flag','curb-length','curb-cost'].forEach(clr);
+    ['curb-r-yards','curb-r-bags60','curb-r-bags80','curb-r-cost'].forEach(id=>setText(id,'—'));
+  }
+  function _curbBody(){
+    return '📐 CURB & GUTTER ESTIMATE\n══════════════════════\n\nLength: '+n('curb-length')+' ft\nDepth: '+n('curb-depth')+' in\nHeight: '+n('curb-height')+' in\nGutter: '+n('curb-gutter')+' in\nFlag: '+n('curb-flag')+' in\n\n══════════════════════\nCubic Yards: '+document.getElementById('curb-r-yards').textContent+'\n60lb bags: '+document.getElementById('curb-r-bags60').textContent+'\n80lb bags: '+document.getElementById('curb-r-bags80').textContent+'\nTotal Cost: '+document.getElementById('curb-r-cost').textContent+'\n\n✅ TOTAL LINEAR FT: '+n('curb-length')+' ft'+'\n══════════════════════\nMaman Calculators\nsurfaceestimator.com'+getSignature();
+  }
+  function emailCurb(){ window.location.href='mailto:?subject=Curb%20%26%20Gutter%20Estimate&body='+encodeURIComponent(_curbBody()); }
+  function textCurb() { window.location.href='sms:?body='+encodeURIComponent(_curbBody()); }
+
+  // ── MEASUREMENTS ──
+  let measRowCount=0;
+  function measAddRow(name,w,h){
+    measRowCount++;
+    const idx=measRowCount;
+    const row=document.createElement('div');
+    row.className='area-row'; row.id='area-row-'+idx;
+    row.innerHTML=`<div class="area-num">${idx}</div>
+      <input class="area-name-input" type="text" placeholder="Area name" value="${name||''}" oninput="measUpdateTotals()" />
+      <div class="area-dim">
+        <input type="number" id="area-w-${idx}" placeholder="W" inputmode="decimal" value="${w||''}" oninput="measRowSF(${idx})" />
+        <span class="x-sep">×</span>
+        <input type="number" id="area-h-${idx}" placeholder="L" inputmode="decimal" value="${h||''}" oninput="measRowSF(${idx})" />
+        <span class="dim-unit">ft</span>
+      </div>
+      <div class="area-sf" id="area-sf-${idx}">—</div>
+      <button class="area-del" onclick="measDelRow(${idx})">✕</button>`;
+    document.getElementById('meas-rows').appendChild(row);
+    if(w&&h) measRowSF(idx);
+    measUpdateTotals();
+  }
+  function measRowSF(idx){
+    const w=parseFloat(document.getElementById('area-w-'+idx).value)||0;
+    const h=parseFloat(document.getElementById('area-h-'+idx).value)||0;
+    document.getElementById('area-sf-'+idx).textContent=(w&&h)?fmtSF(w*h):'—';
+    measUpdateTotals();
+  }
+  function measDelRow(idx){ const r=document.getElementById('area-row-'+idx);if(r)r.remove();measUpdateTotals(); }
+  function measUpdateTotals(){
+    let total=0,count=0;
+    document.querySelectorAll('.area-row').forEach(row=>{
+      const id=row.id.replace('area-row-','');
+      const w=parseFloat(document.getElementById('area-w-'+id)?.value)||0;
+      const h=parseFloat(document.getElementById('area-h-'+id)?.value)||0;
+      if(w>0&&h>0){total+=w*h;count++;}
+    });
+    setText('meas-count',count);
+    setText('meas-total-sf',fmtSF(total));
+    setText('meas-waste-sf',fmtSF(total*1.10));
+    const price=parseFloat(document.getElementById('meas-price').value)||0;
+    const extra=parseFloat(document.getElementById('meas-extra').value)||0;
+    setText('meas-est-total',(price>0&&total>0)?'$'+(total*price+extra).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—');
+  }
+  function measClear(){
+    document.getElementById('meas-rows').innerHTML='';
+    ['meas-price','meas-extra'].forEach(clr);
+    measRowCount=0; measUpdateTotals();
+    measAddRow();measAddRow();measAddRow();
+  }
+  function _measBody(){
+    // recalculate fresh before building message
+    let lines='';
+    let total=0;
+    document.querySelectorAll('.area-row').forEach(row=>{
+      const id=row.id.replace('area-row-','');
+      const nm=row.querySelector('.area-name-input').value||('Area '+id);
+      const w=parseFloat(document.getElementById('area-w-'+id)?.value)||0;
+      const h=parseFloat(document.getElementById('area-h-'+id)?.value)||0;
+      if(w&&h){
+        const sf=w*h;
+        total+=sf;
+        lines+=nm+': '+w+' × '+h+' = '+sf.toLocaleString('en-US',{maximumFractionDigits:1})+' SF\n';
+      }
+    });
+    const waste    = total * 1.10;
+    const price    = parseFloat(document.getElementById('meas-price').value)||0;
+    const extra    = parseFloat(document.getElementById('meas-extra').value)||0;
+    const estTotal = (price>0&&total>0) ? '$'+(total*price+extra).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+    let msg = '📐 MEASUREMENTS ESTIMATE\n';
+    msg += '══════════════════════\n\n';
+    if(lines) msg += 'AREAS:\n' + lines + '\n';
+    msg += '══════════════════════\n';
+    msg += '✅ TOTAL SF: ' + total.toLocaleString('en-US',{maximumFractionDigits:1}) + ' SF\n';
+    msg += '📦 +10% Waste: ' + waste.toLocaleString('en-US',{maximumFractionDigits:1}) + ' SF\n';
+    if(price) msg += '💰 Price per SF: $' + price + '\n';
+    if(extra) msg += '➕ Extra cost: $' + extra + '\n';
+    msg += '💵 ESTIMATED TOTAL: ' + estTotal + '\n';
+    msg += '══════════════════════\n';
+    msg += 'Maman Calculators\nsurfaceestimator.com'+getSignature();
+    return msg;
+  }
+  function measEmail(){ window.location.href='mailto:?subject=Measurements%20Estimate&body='+encodeURIComponent(_measBody()); }
+  function measText() { window.location.href='sms:?body='+encodeURIComponent(_measBody()); }
+
+  // ── CALC PICKER ──
+  function openCalcPicker(){
+    let total=0;
+    document.querySelectorAll('.area-row').forEach(row=>{
+      const id=row.id.replace('area-row-','');
+      const w=parseFloat(document.getElementById('area-w-'+id)?.value)||0;
+      const h=parseFloat(document.getElementById('area-h-'+id)?.value)||0;
+      total+=w*h;
+    });
+    if(total<=0) return alert('Add at least one area with dimensions first.');
+    window._measTotalSF=total;
+    setText('picker-sf-label',total.toLocaleString('en-US',{maximumFractionDigits:1})+' SF');
+    document.getElementById('calc-picker-overlay').classList.remove('hidden');
+  }
+  function closeCalcPicker(){ document.getElementById('calc-picker-overlay').classList.add('hidden'); }
+  function sendToCalc(target){
+    closeCalcPicker();
+    const sf=Math.round((window._measTotalSF||0)*10)/10;
+    if(!sf) return;
+    const pills=document.querySelectorAll('.pill-tab');
+    if(target==='asphalt'){
+      switchTab('asphalt',pills[0]);
+      document.getElementById('asp-width').value=1;
+      document.getElementById('asp-length').value=sf;
+    } else if(target==='concrete-slab'){
+      switchTab('concrete',pills[1]);
+      openConSub('slab');
+      document.getElementById('con-lwt-length').value=sf;
+      document.getElementById('con-lwt-height').value=1;
+    } else if(target==='sand'){
+      switchTab('sand',pills[2]);
+      document.getElementById('snd-width').value=1;
+      document.getElementById('snd-length').value=sf;
+    }
+    window.scrollTo(0,0);
+  }
+
+  // ── ADDRESS SEARCH (OpenStreetMap Nominatim — free, no key) ──
+  let _addrTimer = null;
+  async function searchAddress(q) {
+    const box = document.getElementById('addr-suggestions');
+    if (q.length < 3) { box.classList.add('hidden'); return; }
+    clearTimeout(_addrTimer);
+    _addrTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&countrycodes=us`);
+        const data = await res.json();
+        box.innerHTML = '';
+        if (!data.length) { box.classList.add('hidden'); return; }
+        data.forEach(item => {
+          const main = item.address?.house_number
+            ? (item.address.house_number + ' ' + (item.address.road||''))
+            : (item.address?.road || item.display_name.split(',')[0]);
+          const secondary = [item.address?.city||item.address?.town||item.address?.village, item.address?.state, item.address?.postcode].filter(Boolean).join(', ');
+          const div = document.createElement('div');
+          div.className = 'addr-suggestion';
+          div.innerHTML = `<span class="addr-icon">📍</span><div><div class="addr-main">${main}</div><div class="addr-secondary">${secondary}</div></div>`;
+          div.onclick = () => {
+            const full = [main, secondary].filter(Boolean).join(', ');
+            document.getElementById('sj-address').value = full;
+            box.classList.add('hidden');
+          };
+          box.appendChild(div);
+        });
+        box.classList.remove('hidden');
+      } catch(e) { box.classList.add('hidden'); }
+    }, 400);
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#sj-address') && !e.target.closest('#addr-suggestions')) {
+      const box = document.getElementById('addr-suggestions');
+      if (box) box.classList.add('hidden');
+    }
+  });
+
+  // ── SAVE JOB FROM ANY CALCULATOR ──
+  let _saveJobSource = 'measurements';
+
+  function openSaveJobFrom(source) {
+    _saveJobSource = source;
+    const icons = {asphalt:'🛣',sand:'🪨',curb:'🚧',concrete:'🏗',measurements:'📐'};
+    const icon = icons[source]||'📋';
+    let lines = [];
+
+    if (source === 'asphalt') {
+      const sf = _aspMode==='sf' ? n('asp-quick-sf') : n('asp-width')*n('asp-length');
+      lines = [icon+' Asphalt','✅ Total SF: '+sf.toLocaleString()+' ft²','📦 Yards: '+document.getElementById('asp-r-yards').textContent,'⚖️ Tons: '+document.getElementById('asp-r-tons').textContent,'💵 Cost: '+document.getElementById('asp-r-cost').textContent];
+    } else if (source === 'sand') {
+      const sf  = _sndMode==='sf' ? n('snd-quick-sf') : n('snd-width')*n('snd-length');
+      const mat = document.getElementById(_sndMode==='sf'?'snd-sf-material':'snd-material').options[document.getElementById(_sndMode==='sf'?'snd-sf-material':'snd-material').selectedIndex].text;
+      lines = [icon+' Sand & Gravel','🪨 Material: '+mat,'✅ Total SF: '+sf.toLocaleString()+' ft²','⚖️ Tons: '+document.getElementById('snd-r-tons').textContent,'📦 Yards: '+document.getElementById('snd-r-yards').textContent,'💵 Cost: '+document.getElementById('snd-r-cost').textContent];
+    } else if (source === 'curb') {
+      const lf  = _curbMode==='sf' ? n('curb-quick-lf') : n('curb-length');
+      const yds = document.getElementById(_curbMode==='sf'?'curb-q-r-yards':'curb-r-yards').textContent;
+      const cost= document.getElementById(_curbMode==='sf'?'curb-q-r-cost':'curb-r-cost').textContent;
+      lines = [icon+' Curb & Gutter','✅ Linear Feet: '+lf+' ft','📦 Yards: '+yds,'💵 Cost: '+cost];
+    } else if (source === 'concrete') {
+      lines = [icon+' '+(conSubTitles[conSubType]||'Concrete'),document.getElementById('con2-headline').textContent,document.getElementById('con2-advisory').textContent];
+    } else {
+      openSaveJob(); return;
+    }
+
+    document.getElementById('sj-summary').textContent = lines.filter(Boolean).join('\n');
+    document.getElementById('save-job-overlay').classList.remove('hidden');
+  }
+
+  // ── SAVE JOB SHEET ──
+  function openSaveJob() {
+    // collect areas for preview
+    let lines = '', total = 0;
+    document.querySelectorAll('.area-row').forEach(row => {
+      const id = row.id.replace('area-row-', '');
+      const nm = row.querySelector('.area-name-input').value || ('Area ' + id);
+      const w  = parseFloat(document.getElementById('area-w-' + id)?.value) || 0;
+      const h  = parseFloat(document.getElementById('area-h-' + id)?.value) || 0;
+      if (w && h) { total += w * h; lines += nm + ': ' + w + ' × ' + h + ' = ' + (w*h).toLocaleString() + ' SF\n'; }
+    });
+    if (!lines) return alert('Add at least one area with measurements first.');
+
+    const price = document.getElementById('meas-price').value;
+    const est   = document.getElementById('meas-est-total').textContent;
+    let summaryLines = ['📐 Measurements', lines.trim(),'','✅ Total SF: ' + total.toLocaleString('en-US',{maximumFractionDigits:0}) + ' ft²'];
+    if (price) summaryLines.push('💰 Price/SF: $' + price);
+    if (est !== '—') summaryLines.push('💵 Estimated Total: ' + est);
+    document.getElementById('sj-summary').textContent = summaryLines.join('\n');
+    document.getElementById('save-job-overlay').classList.remove('hidden');
+  }
+
+  let _sjMode = 'new';
+  let _sjSelectedJobId = null;
+
+  function setSJMode(mode) {
+    _sjMode = mode;
+    _sjSelectedJobId = null;
+    document.getElementById('sj-new-btn').classList.toggle('active', mode==='new');
+    document.getElementById('sj-existing-btn').classList.toggle('active', mode==='existing');
+    document.getElementById('sj-new-fields').classList.toggle('hidden', mode==='existing');
+    document.getElementById('sj-existing-fields').classList.toggle('hidden', mode==='new');
+    if (mode==='existing') loadExistingJobsList();
+  }
+
+  let _existingJobsCache = [];
+
+  async function loadExistingJobsList() {
+    const list = document.getElementById('sj-existing-list');
+    list.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);">Loading…</div>';
+    try {
+      _existingJobsCache = await window._loadProjects();
+      renderExistingList(_existingJobsCache);
+    } catch(e) { list.innerHTML = '<div style="color:var(--text3);padding:12px;">Error loading jobs.</div>'; }
+  }
+
+  function renderExistingList(jobs) {
+    const list = document.getElementById('sj-existing-list');
+    if (!jobs.length) {
+      list.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);">No saved jobs yet. Create a new job first.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    jobs.forEach(job => {
+      const div = document.createElement('div');
+      div.className = 'sj-job-option';
+      div.id = 'sjopt-' + job.id;
+      const calcsCount = (job.calcs||[]).length;
+      const date = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleDateString() : '';
+      div.innerHTML = `
+        <div style="flex:1;">
+          <div class="sj-job-opt-name">📍 ${job.address||job.name}</div>
+          <div class="sj-job-opt-meta">${job.customer?'👤 '+job.customer+' · ':''}${calcsCount} calc${calcsCount!==1?'s':''} · ${(job.totalSF||0).toLocaleString()} SF${date?' · '+date:''}</div>
+        </div>
+        <div class="sj-job-opt-check">✅</div>`;
+      div.onclick = () => {
+        document.querySelectorAll('.sj-job-option').forEach(o=>o.classList.remove('selected'));
+        div.classList.add('selected');
+        _sjSelectedJobId = job.id;
+      };
+      list.appendChild(div);
+    });
+  }
+
+  function filterExistingList(q) {
+    const query = q.trim().toLowerCase();
+    if (!query) { renderExistingList(_existingJobsCache); return; }
+    renderExistingList(_existingJobsCache.filter(j =>
+      (j.address||j.name||'').toLowerCase().includes(query) ||
+      (j.customer||'').toLowerCase().includes(query)
+    ));
+  }
+
+  function closeSaveJob() {
+    document.getElementById('save-job-overlay').classList.add('hidden');
+    _sjMode = 'new'; _sjSelectedJobId = null;
+    // reset to new mode
+    setSJMode('new');
+    document.getElementById('sj-new-btn').classList.add('active');
+    document.getElementById('sj-existing-btn').classList.remove('active');
+    document.getElementById('sj-new-fields').classList.remove('hidden');
+    document.getElementById('sj-existing-fields').classList.add('hidden');
+  }
+
+  async function confirmSaveJob() {
+    const btn = document.getElementById('sj-save-btn');
+
+    // Guard: must be logged in
+    if (!window._uid) {
+      alert('You must be logged in to save. Please refresh and sign in.');
+      return;
+    }
+
+    const resetBtn = () => { btn.textContent = '💾 Save Job'; btn.disabled = false; };
+    btn.textContent = '⏳ Saving...'; btn.disabled = true;
+
+    // Set a safety timeout — never stay stuck
+    const safetyTimer = setTimeout(() => {
+      resetBtn();
+      alert('Save timed out. Please check your connection and try again.');
+    }, 12000);
+
+    try {
+      // Build calculation object
+      const calc = {
+        source:  _saveJobSource || 'unknown',
+        summary: document.getElementById('sj-summary').textContent || '',
+        savedAt: new Date().toISOString()
+      };
+
+      // Add areas/SF based on source
+      if (_saveJobSource === 'measurements') {
+        const areas = []; let total = 0;
+        document.querySelectorAll('.area-row').forEach(row => {
+          const id = row.id.replace('area-row-','');
+          const nm = row.querySelector('.area-name-input')?.value || ('Area '+id);
+          const w  = parseFloat(document.getElementById('area-w-'+id)?.value)||0;
+          const h  = parseFloat(document.getElementById('area-h-'+id)?.value)||0;
+          if (w&&h) { areas.push({name:nm,w,h,sf:w*h}); total+=w*h; }
+        });
+        calc.areas   = areas;
+        calc.totalSF = total;
+        calc.price   = document.getElementById('meas-price')?.value||'';
+      } else {
+        // For other calculators extract SF from summary text
+        const sumText = calc.summary;
+        const sfMatch = sumText.match(/(\d[\d,]*)\s*ft²/);
+        if (sfMatch) calc.totalSF = parseFloat(sfMatch[1].replace(/,/g,''))||0;
+      }
+
+      if (_sjMode === 'existing') {
+        if (!_sjSelectedJobId) {
+          clearTimeout(safetyTimer); resetBtn();
+          return alert('Please select a job from the list first.');
+        }
+        await window._addCalcToJob(_sjSelectedJobId, calc);
+
+      } else {
+        const address  = document.getElementById('sj-address').value.trim();
+        const customer = document.getElementById('sj-customer').value.trim();
+        const phone    = document.getElementById('sj-phone').value.trim();
+        const phone2   = document.getElementById('sj-phone2').value.trim();
+        const notes    = document.getElementById('sj-notes').value.trim();
+        if (!address) {
+          clearTimeout(safetyTimer); resetBtn();
+          return alert('Please enter a job address.');
+        }
+        await window._saveProject({
+          name: address, address, customer, phone, phone2, notes,
+          source: _saveJobSource,
+          calcs: [calc],
+          totalSF: calc.totalSF||0,
+          areas: calc.areas||[],
+          price: calc.price||'',
+          summary: calc.summary||''
+        });
+      }
+
+      clearTimeout(safetyTimer);
+      btn.textContent = '✅ Saved!';
+      setTimeout(() => {
+        resetBtn();
+        closeSaveJob();
+        ['sj-address','sj-customer','sj-phone','sj-phone2','sj-notes'].forEach(id => {
+          const el = document.getElementById(id); if(el) el.value='';
+        });
+      }, 1500);
+
+    } catch(e) {
+      clearTimeout(safetyTimer);
+      resetBtn();
+      console.error('Save error:', e);
+      alert('Error saving: ' + (e.message||'Unknown error') + '\n\nPlease try again.');
+    }
+  }
+
+  // ── JOBS PAGE (clean rewrite) ──
+  let _allJobs = [];
+
+  async function loadJobsPage() {
+    const list  = document.getElementById('jobs-page-list');
+    const empty = document.getElementById('jobs-page-empty');
+    const noRes = document.getElementById('jobs-no-results');
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);">Loading...</div>';
+    empty.style.display = 'none';
+    noRes.style.display = 'none';
+    document.getElementById('jobs-search').value = '';
+    document.getElementById('jobs-search-clear').classList.add('hidden');
+    try {
+      _allJobs = await window._loadProjects();
+      renderJobsList(_allJobs);
+    } catch(e) {
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);">Error loading. Please try again.</div>';
+    }
+  }
+
+  function renderJobsList(jobs) {
+    const list  = document.getElementById('jobs-page-list');
+    const empty = document.getElementById('jobs-page-empty');
+    const noRes = document.getElementById('jobs-no-results');
+    list.innerHTML = ''; empty.style.display='none'; noRes.style.display='none';
+    if (!_allJobs.length) { empty.style.display='block'; return; }
+    if (!jobs.length)     { noRes.style.display='block'; return; }
+    jobs.forEach(job => renderJobCard(job, list));
+    // Stats
+    const totalSF = jobs.reduce((s,j)=>s+(j.totalSF||0),0);
+    document.getElementById('jobs-stats').innerHTML =
+      `<div class="jobs-stat-chip"><span>${jobs.length}</span> jobs</div>` +
+      `<div class="jobs-stat-chip"><span>${totalSF.toLocaleString('en-US',{maximumFractionDigits:0})}</span> total SF</div>`;
+  }
+
+  function filterJobs(q) {
+    const query = q.trim().toLowerCase();
+    document.getElementById('jobs-search-clear').classList.toggle('hidden', !query);
+    if (!query) { renderJobsList(_allJobs); return; }
+    renderJobsList(_allJobs.filter(j =>
+      (j.address||j.name||'').toLowerCase().includes(query) ||
+      (j.customer||'').toLowerCase().includes(query) ||
+      (j.phone||'').toLowerCase().includes(query) ||
+      (j.notes||'').toLowerCase().includes(query)
+    ));
+  }
+
+  function clearJobSearch() {
+    document.getElementById('jobs-search').value = '';
+    document.getElementById('jobs-search-clear').classList.add('hidden');
+    renderJobsList(_allJobs);
+  }
+
+  function renderJobCard(job, container) {
+    const date   = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleDateString() : '';
+    const sfText = job.totalSF ? job.totalSF.toLocaleString('en-US',{maximumFractionDigits:0})+' SF' : '';
+    const calcs  = job.calcs || [];
+    const calcIcons = {asphalt:'🛣',concrete:'🏗',sand:'🪨',curb:'🚧',measurements:'📐'};
+
+    // Build calcs HTML
+    let calcsHTML = '';
+    if (calcs.length) {
+      calcsHTML = calcs.map((c,i) => {
+        const ci  = calcIcons[c.source||'measurements']||'📋';
+        const dt  = c.savedAt ? new Date(c.savedAt).toLocaleDateString() : '';
+        const src = (c.source||'calculation').charAt(0).toUpperCase()+(c.source||'').slice(1);
+        const al  = (c.areas||[]).map(a=>a.name+': '+a.w+'×'+a.h+'='+a.sf.toLocaleString()+' SF').join('<br>') || (c.summary||'').replace(/\n/g,'<br>');
+        return `<div class="calc-entry">
+          <div class="calc-entry-header">${ci} <b>${src}</b>${c.totalSF?' · '+c.totalSF.toLocaleString()+' SF':''} <span style="font-size:10px;color:var(--text3);float:right;">${dt}</span></div>
+          ${al?`<div class="job-areas-list">${al}</div>`:''}
+          <button style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;padding:4px 0 0;" onclick="deleteCalcFromJob('${job.id}',${i})">🗑 Remove this calculation</button>
+        </div>`;
+      }).join('');
+    } else if (job.areas?.length || job.summary) {
+      // legacy single calc
+      const al = job.areas?.map(a=>a.name+': '+a.w+'×'+a.h+'='+a.sf.toLocaleString()+' SF').join('<br>') || (job.summary||'').replace(/\n/g,'<br>');
+      calcsHTML = `<div class="calc-entry"><div class="job-areas-list">${al}</div></div>`;
+    }
+
+    // Swipe wrapper
+    const wrap = document.createElement('div');
+    wrap.className = 'job-card-wrap';
+    wrap.id = 'jwrap-' + job.id;
+
+    // Red delete reveal
+    const delReveal = document.createElement('div');
+    delReveal.className = 'job-delete-reveal';
+    delReveal.innerHTML = '🗑<span>Delete</span>';
+    delReveal.onclick = () => deleteJobCard(job.id);
+    wrap.appendChild(delReveal);
+
+    const card = document.createElement('div');
+    card.className='job-card'; card.id='jcard-'+job.id;
+
+    // Touch swipe logic
+    let startX = 0, isSwiped = false;
+    card.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+    card.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (dx < -50) {
+        card.classList.add('swiped'); isSwiped = true;
+      } else if (dx > 30) {
+        card.classList.remove('swiped'); isSwiped = false;
+      }
+    }, {passive:true});
+    // Tap anywhere outside to close swipe
+    document.addEventListener('touchstart', e => {
+      if (isSwiped && !wrap.contains(e.target)) {
+        card.classList.remove('swiped'); isSwiped = false;
+      }
+    }, {passive:true});
+    card.innerHTML = `
+      <div class="job-card-header" onclick="toggleJobCard('${job.id}')">
+        <div class="job-card-icon">📍</div>
+        <div class="job-card-body">
+          <div class="job-card-address">${job.address||job.name||'Unnamed Job'}</div>
+          <div class="job-card-customer">${job.customer?'👤 '+job.customer:''}${job.phone?' · 📞 '+job.phone:''}${job.phone2?' · 📞 '+job.phone2:''}</div>
+        </div>
+        <div>
+          <div class="job-card-sf">${sfText}</div>
+          <div class="job-card-date">${date}</div>
+        </div>
+      </div>
+      <div class="job-card-details" id="jdetails-${job.id}">
+        ${calcsHTML?`<div style="margin-bottom:10px;">${calcsHTML}</div>`:''}
+        ${job.notes?`<div style="background:var(--card2);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text2);margin-bottom:10px;">📝 ${job.notes}</div>`:''}
+        <div class="job-actions">
+          ${job.areas?.length?`<button class="job-action-btn jab-load" onclick="loadJobToMeas('${job.id}')">📐 Load</button>`:''}
+          ${job.phone?`<button class="job-action-btn jab-call" onclick="window.location.href='tel:${job.phone.replace(/\D/g,'')}'" >📞 ${job.phone}</button>`:''}
+          ${job.phone2?`<button class="job-action-btn jab-call" onclick="window.location.href='tel:${job.phone2.replace(/\D/g,'')}'" >📞 ${job.phone2}</button>`:''}
+          <button class="job-action-btn jab-share" onclick='shareJob("${job.id}")'>↗ Share</button>
+          <button class="job-action-btn" style="background:#1a4a8a;color:#5b9bd5;" onclick='openEditJob("${job.id}")'>✏️ Edit</button>
+        </div>
+      </div>`;
+    wrap.appendChild(card);
+    container.appendChild(wrap);
+  }
+
+  function toggleJobCard(id) {
+    document.getElementById('jdetails-'+id).classList.toggle('open');
+  }
+
+  async function deleteCalcFromJob(jobId, calcIndex) {
+    if (!confirm('Remove this calculation?')) return;
+    const job = _allJobs.find(j=>j.id===jobId); if(!job) return;
+    const calcs = [...(job.calcs||[])];
+    calcs.splice(calcIndex, 1);
+    const newSF = calcs.reduce((s,c)=>s+(c.totalSF||0),0);
+    try {
+      await window._updateJob(jobId, { calcs, totalSF: newSF });
+      job.calcs = calcs; job.totalSF = newSF;
+      // re-render
+      const old = document.getElementById('jcard-'+jobId);
+      if (old) { const list = old.parentNode; old.remove(); renderJobCard(job, list); }
+    } catch(e) { alert('Error removing calculation.'); }
+  }
+
+  async function deleteJobCard(id) {
+    // snap back swipe first
+    const card = document.getElementById('jcard-'+id);
+    if (card) card.classList.remove('swiped');
+    const wrap = document.getElementById('jwrap-'+id);
+    const reveal = wrap ? wrap.querySelector('.job-delete-reveal') : null;
+    if (reveal) reveal.style.visibility = 'hidden';
+
+    if (!confirm('Are you sure you want to delete this job?')) {
+      return;
+    }
+    try {
+      await window._deleteProject(id);
+      _allJobs   = _allJobs.filter(j=>j.id!==id);
+      _panelJobs = _panelJobs.filter(j=>j.id!==id);
+      // remove the wrapper
+      const wrap = document.getElementById('jwrap-'+id);
+      if (wrap) wrap.remove();
+      else if (card) card.remove();
+      // refresh whichever list is visible
+      if (!document.getElementById('jobs-panel').classList.contains('hidden')) {
+        renderJobsPanel(_panelJobs);
+      } else {
+        renderJobsList(_allJobs);
+      }
+    } catch(e) { alert('Error deleting.'); }
+  }
+
+  function loadJobToMeas(id) {
+    const job = _allJobs.find(j=>j.id===id)||_panelJobs.find(j=>j.id===id); if(!job) return;
+    closeJobsPanel();
+    switchTab('meas', document.querySelector('.pill-tab:nth-child(5)'));
+    document.getElementById('meas-rows').innerHTML='';
+    measRowCount=0;
+    (job.areas||[]).forEach(a=>measAddRow(a.name,a.w,a.h));
+    document.getElementById('meas-price').value=job.price||'';
+    document.getElementById('meas-extra').value=job.extra||'';
+    measUpdateTotals();
+    const toast=document.getElementById('share-toast');
+    toast.textContent='📍 Loaded: '+(job.address||job.name);
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),2500);
+  }
+
+  function emailJobCard(id) {
+    const job = (_allJobs.find(j=>j.id===id)) || (_panelJobs.find(j=>j.id===id));
+    if(!job) return;
+    const body = buildJobEmailBody(job);
+    window.location.href='mailto:?subject=Job: '+encodeURIComponent(job.address||job.name)+'&body='+encodeURIComponent(body);
+  }
+
+  function textJobCard(id) {
+    const job = (_allJobs.find(j=>j.id===id)) || (_panelJobs.find(j=>j.id===id));
+    if(!job) return;
+    window.location.href='sms:?body='+encodeURIComponent(buildJobEmailBody(job));
+  }
+
+  function buildJobEmailBody(job) {
+    const calcs   = job.calcs || [];
+    const calcIcons = {asphalt:'🛣',concrete:'🏗',sand:'🪨',curb:'🚧',measurements:'📐'};
+
+    let calcSection = '';
+    if (calcs.length) {
+      calcSection = calcs.map((c, i) => {
+        const icon = calcIcons[c.source||'measurements'] || '📋';
+        const src  = (c.source||'calculation').charAt(0).toUpperCase() + (c.source||'').slice(1);
+        // areas list
+        const areaLines = (c.areas||[]).map(a =>
+          '  ' + a.name + ': ' + a.w + ' × ' + a.h + ' = ' + a.sf.toLocaleString('en-US',{maximumFractionDigits:0}) + ' SF'
+        ).join('\n');
+        // SF total for this calc
+        const sfLine = c.totalSF ? '  Total SF: ' + c.totalSF.toLocaleString('en-US',{maximumFractionDigits:0}) + ' SF' : '';
+        // summary (contains result values like yards/tons)
+        const summaryLine = c.summary ? c.summary.replace(/^📐.*\n/,'').replace(/══+\n?/g,'').trim() : '';
+        let lines = icon + ' ' + src + '\n';
+        if (areaLines) lines += areaLines + '\n';
+        if (sfLine)    lines += sfLine + '\n';
+        if (summaryLine && !areaLines) lines += summaryLine + '\n';
+        return lines.trim();
+      }).join('\n\n');
+    } else if (job.areas?.length || job.summary) {
+      // legacy
+      const areaLines = (job.areas||[]).map(a =>
+        '  ' + a.name + ': ' + a.w + ' × ' + a.h + ' = ' + a.sf.toLocaleString('en-US',{maximumFractionDigits:0}) + ' SF'
+      ).join('\n') || (job.summary||'');
+      calcSection = areaLines;
+    }
+
+    const totalSF = job.totalSF
+      ? '\n══════════════════════\n✅ TOTAL SF: ' + job.totalSF.toLocaleString('en-US',{maximumFractionDigits:0}) + ' SF'
+      : '';
+
+    return '📋 JOB SUMMARY\n══════════════════════\n' +
+      '📍 ' + (job.address||job.name) + '\n' +
+      (job.customer ? '👤 ' + job.customer + '\n' : '') +
+      (job.phone    ? '📞 ' + job.phone    + '\n' : '') +
+      (job.phone2   ? '📞 ' + job.phone2   + '\n' : '') +
+      (job.notes    ? '📝 ' + job.notes    + '\n' : '') +
+      '\n══════════════════════\n' +
+      (calcSection ? calcSection + '\n' : '') +
+      totalSF + '\n' +
+      getSignature();
+  }
+
+  // ── EDIT JOB ──
+  function openEditJob(id) {
+    const job = _allJobs.find(j=>j.id===id); if(!job) return;
+    document.getElementById('ej-id').value      = id;
+    document.getElementById('ej-address').value  = job.address||job.name||'';
+    document.getElementById('ej-customer').value = job.customer||'';
+    document.getElementById('ej-phone').value    = job.phone||'';
+    document.getElementById('ej-phone2').value   = job.phone2||'';
+    document.getElementById('ej-notes').value    = job.notes||'';
+    // render calcs list
+    const calcs = job.calcs||[];
+    const calcIcons = {asphalt:'🛣',concrete:'🏗',sand:'🪨',curb:'🚧',measurements:'📐'};
+    const ejList = document.getElementById('ej-calcs-list');
+    if (!calcs.length) {
+      ejList.innerHTML = '<div style="color:var(--text3);font-size:13px;">No calculations saved yet.</div>';
+    } else {
+      ejList.innerHTML = calcs.map((c,i)=>{
+        const ci  = calcIcons[c.source||'measurements']||'📋';
+        const src = (c.source||'calculation').charAt(0).toUpperCase()+(c.source||'').slice(1);
+        const dt  = c.savedAt ? new Date(c.savedAt).toLocaleDateString() : '';
+        return `<div style="display:flex;align-items:center;gap:10px;background:var(--card2);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+          <span style="font-size:18px;">${ci}</span>
+          <div style="flex:1;font-size:13px;font-weight:700;color:var(--text);">${src} ${c.totalSF?'· '+c.totalSF.toLocaleString()+' SF':''}<div style="font-size:11px;color:var(--text3);">${dt}</div></div>
+          <button style="background:#3a0808;border:none;border-radius:8px;padding:6px 10px;color:#ff6b6b;font-size:12px;font-weight:700;cursor:pointer;" onclick="removeCalcInEdit(${i})">🗑 Remove</button>
+        </div>`;
+      }).join('');
+    }
+    document.getElementById('edit-job-overlay').classList.remove('hidden');
+  }
+
+  function removeCalcInEdit(idx) {
+    if (!confirm('Remove this calculation?')) return;
+    const id = document.getElementById('ej-id').value;
+    const job = _allJobs.find(j=>j.id===id); if(!job) return;
+    const calcs = [...(job.calcs||[])];
+    calcs.splice(idx,1);
+    job.calcs = calcs;
+    openEditJob(id); // re-render
+  }
+
+  async function confirmEditJob() {
+    const id       = document.getElementById('ej-id').value;
+    const address  = document.getElementById('ej-address').value.trim();
+    const customer = document.getElementById('ej-customer').value.trim();
+    const phone    = document.getElementById('ej-phone').value.trim();
+    const phone2   = document.getElementById('ej-phone2').value.trim();
+    const notes    = document.getElementById('ej-notes').value.trim();
+    if (!address) return alert('Address is required.');
+    if (!window._uid) return alert('Not logged in. Please refresh.');
+    const job   = _allJobs.find(j=>j.id===id); if(!job) return;
+    const calcs = job.calcs||[];
+    const newSF = calcs.reduce((s,c)=>s+(Number(c.totalSF)||0),0);
+    const btn   = document.getElementById('ej-save-btn');
+    const resetBtn = () => { btn.textContent='✅ Save Changes'; btn.disabled=false; };
+    btn.textContent='⏳ Saving...'; btn.disabled=true;
+    const safetyTimer = setTimeout(() => { resetBtn(); alert('Save timed out. Please try again.'); }, 12000);
+    try {
+      await window._updateJob(id, { name:address, address, customer, phone, phone2, notes, calcs, totalSF:newSF });
+      Object.assign(job, {name:address,address,customer,phone,phone2,notes,calcs,totalSF:newSF});
+      clearTimeout(safetyTimer);
+      btn.textContent='✅ Saved!';
+      setTimeout(()=>{
+        resetBtn(); closeEditJob();
+        if (!document.getElementById('jobs-panel').classList.contains('hidden')) {
+          loadJobsPanelData();
+        } else {
+          loadJobsPage();
+        }
+      },1200);
+    } catch(e) {
+      clearTimeout(safetyTimer);
+      resetBtn();
+      alert('Error saving: '+(e.message||'Please try again.'));
+    }
+  }
+
+  function closeEditJob() {
+    document.getElementById('edit-job-overlay').classList.add('hidden');
+  }
+
+  // ── OPEN PROJECTS SHEET (measurements tab) ──
+  async function openProjects() {
+    document.getElementById('projects-overlay').classList.remove('hidden');
+    const list  = document.getElementById('projects-list');
+    const empty = document.getElementById('projects-empty');
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);">Loading...</div>';
+    empty.style.display = 'none';
+    try {
+      const projects = await window._loadProjects();
+      list.innerHTML = '';
+      if (!projects.length) { empty.style.display='block'; return; }
+      projects.forEach(proj => {
+        const date = proj.createdAt?.toDate ? proj.createdAt.toDate().toLocaleDateString() : '';
+        const div = document.createElement('div');
+        div.className = 'proj-item';
+        div.innerHTML = `
+          <div class="proj-item-body" onclick="loadProject(${JSON.stringify(proj).replace(/"/g,'&quot;')})">
+            <div class="proj-item-name">📍 ${proj.address||proj.name}</div>
+            <div class="proj-item-meta">${proj.customer?'👤 '+proj.customer+' · ':''} ${date}</div>
+          </div>
+          <div class="proj-item-sf">${(proj.totalSF||0).toLocaleString('en-US',{maximumFractionDigits:0})} SF</div>
+          <button class="proj-item-del" onclick="event.stopPropagation();deleteProject('${proj.id}',this.closest('.proj-item'))">✕</button>`;
+        list.appendChild(div);
+      });
+    } catch(e) { list.innerHTML='<div style="color:var(--text3);padding:12px;">Error loading.</div>'; }
+  }
+
+  function closeProjects() { document.getElementById('projects-overlay').classList.add('hidden'); }
+
+  function loadProject(proj) {
+    closeProjects();
+    document.getElementById('meas-rows').innerHTML='';
+    measRowCount=0;
+    (proj.areas||[]).forEach(a=>measAddRow(a.name,a.w,a.h));
+    document.getElementById('meas-price').value=proj.price||'';
+    document.getElementById('meas-extra').value=proj.extra||'';
+    measUpdateTotals();
+    const toast=document.getElementById('share-toast');
+    toast.textContent='📍 Loaded: '+(proj.address||proj.name);
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),2500);
+  }
+
+  async function deleteProject(id, el) {
+    if (!confirm('Delete?')) return;
+    try { await window._deleteProject(id); if(el) el.remove(); } catch(e) { alert('Error.'); }
+  }
+
+  // Init measurements
+  measAddRow();measAddRow();measAddRow();
+</script>
+</body>
+</html>
